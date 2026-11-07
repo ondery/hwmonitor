@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
+  <resheader name="version"><value>2.0</value></resheader>
+  <resheader name="reader"><value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
+  <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
+  <data name="AppName" xml:space="preserve"><value>HW Monitor</value></data>
+  <data name="AppSubtitle" xml:space="preserve"><value>Live processor and graphics usage and temperature</value></data>
+  <data name="PageTitle" xml:space="preserve"><value>Hardware sensors</value></data>
+  <data name="PageName" xml:space="preserve"><value>Open</value></data>
+  <data name="SearchPlaceholder" xml:space="preserve"><value>Search sensors</value></data>
+  <data name="SectionCooling" xml:space="preserve"><value>Cooling</value></data>
+  <data name="SectionProcessors" xml:space="preserve"><value>Processors</value></data>
+  <data name="SectionGraphics" xml:space="preserve"><value>Graphics</value></data>
+  <data name="SectionStatus" xml:space="preserve"><value>Status</value></data>
+  <data name="EmptyTitle" xml:space="preserve"><value>No processors or graphics adapters found</value></data>
+  <data name="EmptySubtitle" xml:space="preserve"><value>HW Monitor could not see a CPU or GPU on this PC.</value></data>
+  <data name="ReadingFormat" xml:space="preserve"><value>{0} {1} · {2}</value></data>
+  <data name="Unavailable" xml:space="preserve"><value>n/a</value></data>
+  <data name="RolePackage" xml:space="preserve"><value>Package</value></data>
+  <data name="RoleHottestCore" xml:space="preserve"><value>Hottest core</value></data>
+  <data name="RoleCoreFormat" xml:space="preserve"><value>Core {0}</value></data>
+  <data name="RoleAdapter" xml:space="preserve"><value>Adapter</value></data>
+  <data name="RoleCpuGraphics" xml:space="preserve"><value>Processor graphics</value></data>
+  <data name="TagBlue" xml:space="preserve"><value>Cool</value></data>
+  <data name="TagYellow" xml:space="preserve"><value>Warm</value></data>
+  <data name="TagOrange" xml:space="preserve"><value>Hot</value></data>
+  <data name="TagRed" xml:space="preserve"><value>Critical</value></data>
+  <data name="StatusTempsTitle" xml:space="preserve"><value>Temperatures unavailable</value></data>
+  <data name="StatusTempsSubtitle" xml:space="preserve"><value>Install the PawnIO driver and restart Command Palette. Usage is still shown. WinRing0 is not used.</value></data>
+  <data name="ReadingSensors" xml:space="preserve"><value>Reading sensors…</value></data>
+  <data name="CoolOn" xml:space="preserve"><value>Cool ON</value></data>
+  <data name="CoolOff" xml:space="preserve"><value>Cool OFF</value></data>
+  <data name="CoolTitle" xml:space="preserve"><value>Cool Mode</value></data>
+  <data name="CoolOnSubtitle" xml:space="preserve"><value>Maximum processor state is limited on the active power scheme.</value></data>
+  <data name="CoolOffSubtitle" xml:space="preserve"><value>Click to limit processor turbo on the active power scheme.</value></data>
+  <data name="CoolAutoSubtitle" xml:space="preserve"><value>Turned on automatically because the processor stayed hot.</value></data>
+  <data name="CoolFailed" xml:space="preserve"><value>Cool Mode could not change the active power scheme. Start Command Palette as administrator and try again.</value></data>
+  <data name="CoolReadFailed" xml:space="preserve"><value>Cool Mode could not read the active power scheme.</value></data>
+  <data name="FanTitle" xml:space="preserve"><value>Fan Mode</value></data>
+  <data name="FanAuto" xml:space="preserve"><value>Fan Auto</value></data>
+  <data name="FanNamed" xml:space="preserve"><value>Fan {0}</value></data>
+  <data name="FanUnsupported" xml:space="preserve"><value>Fan control is not supported on this device</value></data>
+  <data name="FanFirmwareSubtitle" xml:space="preserve"><value>Firmware is controlling the fans. Click to cycle enabled modes.</value></data>
+  <data name="FanDutySubtitle" xml:space="preserve"><value>{0}% duty on {1} controllable fan(s).</value></data>
+  <data name="FanApplyFailed" xml:space="preserve"><value>The fan controller did not accept the new duty. Firmware control was requested again.</value></data>
+  <data name="FanTooFew" xml:space="preserve"><value>At least two fan modes must stay enabled.</value></data>
+  <data name="SettingRefreshLabel" xml:space="preserve"><value>Refresh interval (ms)</value></data>
+  <data name="SettingRefreshDescription" xml:space="preserve"><value>How often sensors refresh. Values outside 500–3000 are clamped.</value></data>
+  <data name="SettingCompactLabel" xml:space="preserve"><value>Compact sensor list</value></data>
+  <data name="SettingCompactDescription" xml:space="preserve"><value>Hide per-core rows. Dock items stay one per processor or graphics adapter.</value></data>
+  <data name="SettingBlueBelowLabel" xml:space="preserve"><value>Blue below (°C)</value></data>
+  <data name="SettingYellowLabel" xml:space="preserve"><value>Yellow from (°C)</value></data>
+  <data name="SettingOrangeLabel" xml:space="preserve"><value>Orange from (°C)</value></data>
+  <data name="SettingRedLabel" xml:space="preserve"><value>Red from (°C)</value></data>
+  <data name="SettingThresholdDescription" xml:space="preserve"><value>Temperatures below yellow are blue. Orange and red must stay above the cooler levels.</value></data>
+  <data name="SettingBlueColorLabel" xml:space="preserve"><value>Blue color</value></data>
+  <data name="SettingYellowColorLabel" xml:space="preserve"><value>Yellow color</value></data>
+  <data name="SettingOrangeColorLabel" xml:space="preserve"><value>Orange color</value></data>
+  <data name="SettingRedColorLabel" xml:space="preserve"><value>Red color</value></data>
+  <data name="SettingColorDescription" xml:space="preserve"><value>Hex color used for the level tag, for example #3B82F6.</value></data>
+  <data name="SettingCoolMaxLabel" xml:space="preserve"><value>Cool Mode processor cap (%)</value></data>
+  <data name="SettingCoolMaxDescription" xml:space="preserve"><value>Maximum processor state while Cool Mode is on. 99% disables turbo boost on most processors.</value></data>
+  <data name="SettingCoolBoostLabel" xml:space="preserve"><value>Also set processor boost mode</value></data>
+  <data name="SettingCoolBoostDescription" xml:space="preserve"><value>Optional. Restored with the original scheme values when Cool Mode turns off.</value></data>
+  <data name="SettingBoostChoiceLabel" xml:space="preserve"><value>Boost mode while Cool Mode is on</value></data>
+  <data name="SettingBoostChoiceDescription" xml:space="preserve"><value>Disabled is the stronger cap. Efficient keeps a lighter boost policy.</value></data>
+  <data name="SettingBoostDisabled" xml:space="preserve"><value>Disabled</value></data>
+  <data name="SettingBoostEfficient" xml:space="preserve"><value>Efficient</value></data>
+  <data name="SettingAutoLabel" xml:space="preserve"><value>Auto Cool Mode</value></data>
+  <data name="SettingAutoDescription" xml:space="preserve"><value>Limit turbo after the processor stays hot, then restore it after the processor stays cooler.</value></data>
+  <data name="SettingAutoOnLabel" xml:space="preserve"><value>Auto Cool on at (°C)</value></data>
+  <data name="SettingAutoOnSecondsLabel" xml:space="preserve"><value>Stay hot for (seconds)</value></data>
+  <data name="SettingAutoOffLabel" xml:space="preserve"><value>Auto Cool off at (°C)</value></data>
+  <data name="SettingAutoOffSecondsLabel" xml:space="preserve"><value>Stay cool for (seconds)</value></data>
+  <data name="SettingFanNameLabel" xml:space="preserve"><value>Fan mode {0} name</value></data>
+  <data name="SettingFanDutyLabel" xml:space="preserve"><value>Fan mode {0} duty (%)</value></data>
+  <data name="SettingFanEnabledLabel" xml:space="preserve"><value>Fan mode {0} enabled</value></data>
+  <data name="SettingFanDutyDescription" xml:space="preserve"><value>0% can stop a fan. Auto and exit hand control back to firmware.</value></data>
+  <data name="SettingExperimentalLabel" xml:space="preserve"><value>Experimental MSI embedded-controller fan probe</value></data>
+  <data name="SettingExperimentalDescription" xml:space="preserve"><value>Off by default. Does not write controller registers. Creator Z16 A11UET is not allow-listed.</value></data>
+</root>

@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <RootNamespace>HWMonitor.Core</RootNamespace>
+    <AssemblyName>HWMonitor.Core</AssemblyName>
+    <Description>Sensor formatting, power-plan planning, and fan-mode rules for HW Monitor.</Description>
+  </PropertyGroup>
+</Project>

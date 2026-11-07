@@ -1,0 +1,27 @@
+# Draft English locale manifest.
+PackageIdentifier: Ondery.HWMonitor
+PackageVersion: 0.1.0.0
+PackageLocale: en-US
+Publisher: Ondery
+PublisherUrl: https://github.com/ondery/hwmonitor
+PublisherSupportUrl: https://github.com/ondery/hwmonitor/issues
+PackageName: HW Monitor
+PackageUrl: https://github.com/ondery/hwmonitor
+License: MIT
+LicenseUrl: https://github.com/ondery/hwmonitor/blob/main/LICENSE
+Copyright: Copyright (c) 2026 Ondery
+ShortDescription: Live CPU and GPU usage and temperature for Command Palette
+Description: |-
+  HW Monitor is a Command Palette extension that shows live usage and temperature
+  for every detected processor and graphics adapter, with dock items, Cool Mode,
+  and fan-mode cycling.
+Moniker: hwmonitor
+Tags:
+- windows-commandpalette-extension
+- hardware
+- temperature
+- cpu
+- gpu
+ReleaseNotesUrl: https://github.com/ondery/hwmonitor/releases
+ManifestType: defaultLocale
+ManifestVersion: 1.10.0
