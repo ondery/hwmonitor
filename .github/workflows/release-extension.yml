@@ -71,6 +71,13 @@ jobs:
         path: ${{ env.FOLDER_NAME }}/bin/Release/installer/*-x64.exe
         if-no-files-found: error
 
+    - name: Upload sensor service
+      uses: actions/upload-artifact@v4
+      with:
+        name: HWMonitor-sensor-service
+        path: ${{ env.FOLDER_NAME }}/bin/Release/sensor-service/**
+        if-no-files-found: warn
+
     - name: Upload ARM64 installer artifact
       uses: actions/upload-artifact@v4
       with:
@@ -99,6 +106,7 @@ jobs:
           1. Download the appropriate installer from the Assets section below
           2. Run the installer
           3. The extension will be registered for the current user and available in Command Palette
+          4. For processor temperature, run scripts/install-sensor-service.ps1 from an elevated PowerShell. It installs PawnIO when needed and registers HW Monitor Sensor Service.
 
           ## More Information
 

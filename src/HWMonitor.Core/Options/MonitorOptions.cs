@@ -3,8 +3,8 @@
 
 using System.Globalization;
 using HWMonitor.Core.Colors;
-using HWMonitor.Core.Fans;
 using HWMonitor.Core.Power;
+using HWMonitor.Core.Sensors;
 
 namespace HWMonitor.Core.Options;
 
@@ -22,8 +22,7 @@ public sealed record MonitorOptions(
     ColorScale Colors,
     CoolOptions Cool,
     AutoCoolOptions AutoCool,
-    FanModeSet Fans,
-    bool ExperimentalMsiEc)
+    PresentationMap Devices)
 {
     public const int DefaultRefreshMs = 1000;
 
@@ -33,8 +32,7 @@ public sealed record MonitorOptions(
         ColorScale.Default,
         CoolOptions.Default,
         AutoCoolOptions.Default,
-        FanModeSet.Default,
-        false);
+        PresentationMap.Empty);
 
     public static int ParseInt(string? text, int fallback)
     {

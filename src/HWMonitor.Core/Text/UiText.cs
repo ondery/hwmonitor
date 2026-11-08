@@ -44,6 +44,8 @@ public static class UiText
 
     public static string RoleCpuGraphics => Get(nameof(RoleCpuGraphics));
 
+    public static string RoleSharedPackage => Get(nameof(RoleSharedPackage));
+
     public static string TagBlue => Get(nameof(TagBlue));
 
     public static string TagYellow => Get(nameof(TagYellow));
@@ -56,11 +58,21 @@ public static class UiText
 
     public static string StatusTempsSubtitle => Get(nameof(StatusTempsSubtitle));
 
+    public static string StatusServiceTitle => Get(nameof(StatusServiceTitle));
+
+    public static string StatusServiceSubtitle => Get(nameof(StatusServiceSubtitle));
+
     public static string ReadingSensors => Get(nameof(ReadingSensors));
 
     public static string CoolOn => Get(nameof(CoolOn));
 
     public static string CoolOff => Get(nameof(CoolOff));
+
+    public static string CoolDockOn => Get(nameof(CoolDockOn));
+
+    public static string CoolDockOff => Get(nameof(CoolDockOff));
+
+    public static string CoolDockLabel => Get(nameof(CoolDockLabel));
 
     public static string CoolTitle => Get(nameof(CoolTitle));
 
@@ -73,18 +85,6 @@ public static class UiText
     public static string CoolFailed => Get(nameof(CoolFailed));
 
     public static string CoolReadFailed => Get(nameof(CoolReadFailed));
-
-    public static string FanTitle => Get(nameof(FanTitle));
-
-    public static string FanAuto => Get(nameof(FanAuto));
-
-    public static string FanUnsupported => Get(nameof(FanUnsupported));
-
-    public static string FanFirmwareSubtitle => Get(nameof(FanFirmwareSubtitle));
-
-    public static string FanApplyFailed => Get(nameof(FanApplyFailed));
-
-    public static string FanTooFew => Get(nameof(FanTooFew));
 
     public static string SettingRefreshLabel => Get(nameof(SettingRefreshLabel));
 
@@ -142,23 +142,27 @@ public static class UiText
 
     public static string SettingAutoOffSecondsLabel => Get(nameof(SettingAutoOffSecondsLabel));
 
-    public static string SettingFanDutyDescription => Get(nameof(SettingFanDutyDescription));
+    public static string SettingDeviceVisibilityDescription => Get(nameof(SettingDeviceVisibilityDescription));
 
-    public static string SettingExperimentalLabel => Get(nameof(SettingExperimentalLabel));
+    public static string VisibilityDefault => Get(nameof(VisibilityDefault));
 
-    public static string SettingExperimentalDescription => Get(nameof(SettingExperimentalDescription));
+    public static string VisibilityShow => Get(nameof(VisibilityShow));
+
+    public static string VisibilityHide => Get(nameof(VisibilityHide));
 
     public static string RoleCore(int number) => string.Format(CultureInfo.CurrentCulture, Get("RoleCoreFormat"), number);
 
-    public static string FanNamed(string name) => string.Format(CultureInfo.CurrentCulture, Get("FanNamed"), name);
+    public static string DeviceShortLabel(string name) => string.Format(CultureInfo.CurrentCulture, Get("SettingDeviceShortLabel"), name);
 
-    public static string FanDuty(int duty, int fans) => string.Format(CultureInfo.CurrentCulture, Get("FanDutySubtitle"), duty, fans);
+    public static string DeviceShortDescription(string id) => string.Format(CultureInfo.CurrentCulture, Get("SettingDeviceShortDescription"), id);
 
-    public static string FanNameLabel(int index) => string.Format(CultureInfo.CurrentCulture, Get("SettingFanNameLabel"), index);
+    public static string DeviceFullLabel(string name) => string.Format(CultureInfo.CurrentCulture, Get("SettingDeviceFullLabel"), name);
 
-    public static string FanDutyLabel(int index) => string.Format(CultureInfo.CurrentCulture, Get("SettingFanDutyLabel"), index);
+    public static string DeviceFullDescription => Get("SettingDeviceFullDescription");
 
-    public static string FanEnabledLabel(int index) => string.Format(CultureInfo.CurrentCulture, Get("SettingFanEnabledLabel"), index);
+    public static string DeviceListLabel(string name) => string.Format(CultureInfo.CurrentCulture, Get("SettingDeviceListLabel"), name);
+
+    public static string DeviceDockLabel(string name) => string.Format(CultureInfo.CurrentCulture, Get("SettingDeviceDockLabel"), name);
 
     private static string Get(string name) => Resources.GetString(name, CultureInfo.CurrentUICulture) ?? name;
 }

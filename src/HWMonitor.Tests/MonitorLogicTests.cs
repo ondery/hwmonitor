@@ -2,13 +2,13 @@
 // SPDX-License-Identifier: MIT
 
 using System.Globalization;
+using System.Text;
 using HWMonitor.Core.Colors;
-using Xunit;
-using HWMonitor.Core.Fans;
 using HWMonitor.Core.Options;
 using HWMonitor.Core.Power;
 using HWMonitor.Core.Sensors;
 using HWMonitor.Core.Text;
+using Xunit;
 
 namespace HWMonitor.Tests;
 
@@ -19,16 +19,23 @@ public class MonitorLogicTests
     {
         var text = ReadingText.Format("{0} {1} · {2}", "CPU", 27, 58, "n/a", CultureInfo.InvariantCulture);
         Assert.Equal("CPU 27% · 58°C", text);
-        Assert.Equal("CPU 27% · n/a", ReadingText.Format("{0} {1} · {2}", "CPU", 27, null, "n/a", CultureInfo.InvariantCulture));
-        Assert.Equal("GPU n/a · 51°C", ReadingText.Format("{0} {1} · {2}", "GPU", null, 51, "n/a", CultureInfo.InvariantCulture));
+        Assert.Equal("55% · 72°C", ReadingText.Value(55, 72, "n/a", false, CultureInfo.InvariantCulture));
+        Assert.Equal("55%", ReadingText.Value(55, null, "n/a", true, CultureInfo.InvariantCulture));
+        Assert.Equal("CPU 55%", ReadingText.ListLine("CPU", 55, null, "n/a", true, CultureInfo.InvariantCulture));
+        Assert.Equal("n/a · 51°C", ReadingText.Value(null, 51, "n/a", false, CultureInfo.InvariantCulture));
     }
 
     [Fact]
-    public void English_resources_include_the_fan_message()
+    public void English_resources_explain_the_sensor_service()
     {
         Assert.Equal("HW Monitor", UiText.AppName);
-        Assert.Equal("Fan control is not supported on this device", UiText.FanUnsupported);
-        Assert.Equal(MsiEcPolicy.UnsupportedMessage, UiText.FanUnsupported);
+        Assert.Equal("Install sensor service for CPU temperature", UiText.StatusServiceTitle);
+        Assert.Equal("Package (shared die)", UiText.RoleSharedPackage);
+        Assert.Equal("Microsoft.CommandPalette.Dock.TitleWidth", DockProperties.TitleWidth);
+        Assert.Equal("Microsoft.CommandPalette.Dock.SubtitleWidth", DockProperties.SubtitleWidth);
+        Assert.Equal("Microsoft.CommandPalette.Dock.TabularDigits", DockProperties.TabularDigits);
+        Assert.Equal("text:100% · 100°C", DockProperties.Sample(ReadingText.SensorTitleSample));
+        Assert.DoesNotContain("18ch", DockProperties.Sample(ReadingText.SensorTitleSample), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -67,9 +74,9 @@ public class MonitorLogicTests
     }
 
     [Fact]
-    public void Target_laptop_sensors_keep_package_cores_and_both_gpus()
+    public void Compose_keeps_package_cores_and_both_gpu_classes()
     {
-        var readings = SensorCatalog.Compose(LaptopSamples(), [], null);
+        var readings = SensorCatalog.Compose(SampleMachine(), [], null);
         var cpu = readings.Single(item => item.IsPrimary && item.Kind == DeviceKind.Cpu);
         Assert.Equal("CPU", cpu.ShortLabel);
         Assert.Equal(27, cpu.UsagePercent);
@@ -95,22 +102,118 @@ public class MonitorLogicTests
     [Fact]
     public void Missing_package_temperature_uses_the_hottest_core()
     {
-        var samples = LaptopSamples().Where(item => item.SensorName != "CPU Package").ToArray();
+        var samples = SampleMachine().Where(item => item.SensorName != "CPU Package").ToArray();
         var cpu = SensorCatalog.Compose(samples, [], null).Single(item => item.IsPrimary && item.Kind == DeviceKind.Cpu);
         Assert.Equal(61, cpu.TemperatureCelsius);
         Assert.Equal(SensorRole.HottestCore, cpu.Role);
     }
 
     [Fact]
-    public void Performance_counters_fill_missing_usage()
+    public void Unrecognized_sensor_names_do_not_become_package_temperature()
     {
-        var samples = LaptopSamples().Where(item =>
-            item.SensorName is not "CPU Total" and not "D3D 3D"
-            && !(item.Metric == MetricKind.Load && item.SensorName.StartsWith("CPU Core", StringComparison.Ordinal))).ToList();
-        samples.Add(Sample("/gpu-intel-integrated/0", "Intel UHD Graphics", DeviceKind.Gpu, GpuClass.Integrated, "GPU Core", MetricKind.Temperature, 49));
+        var readings = SensorCatalog.Compose(
+            [Sample("/cpu/0", "Processor", DeviceKind.Cpu, GpuClass.None, "VRM", MetricKind.Temperature, 40)],
+            [],
+            null);
+        var cpu = readings.Single(item => item.IsPrimary);
+        Assert.Null(cpu.TemperatureCelsius);
+        Assert.Equal("CPU", cpu.ShortLabel);
+    }
+
+    [Fact]
+    public void Package_synonyms_are_accepted()
+    {
+        var readings = SensorCatalog.Compose(
+            [Sample("/cpu/0", "Processor", DeviceKind.Cpu, GpuClass.None, "CPU Tctl", MetricKind.Temperature, 66)],
+            [],
+            null);
+        Assert.Equal(66, readings.Single().TemperatureCelsius);
+        Assert.Equal(SensorSources.Package, readings.Single().TemperatureSource);
+    }
+
+    [Fact]
+    public void Integrated_graphics_without_a_sensor_use_the_cpu_package()
+    {
+        var samples = SampleMachine().Where(item => item.SensorName != "CPU Graphics").ToArray();
+        var igpu = SensorCatalog.Compose(samples, [], null).Single(item => item.ShortLabel == "iGPU");
+        Assert.Equal(58, igpu.TemperatureCelsius);
+        Assert.Equal(SensorSources.SharedPackage, igpu.TemperatureSource);
+        Assert.Equal(SensorRole.SharedPackage, igpu.Role);
+        Assert.True(TemperatureGaps.IsSharedDieGap(igpu with { TemperatureCelsius = null }));
+        Assert.False(TemperatureGaps.IsSharedDieGap(igpu));
+    }
+
+    [Fact]
+    public void A_discrete_adapter_keeps_a_missing_temperature_empty()
+    {
+        var samples = SampleMachine().Where(item => item.Metric != MetricKind.Temperature || item.Kind != DeviceKind.Gpu || item.GpuClass != GpuClass.Discrete).ToArray();
+        var gpu = SensorCatalog.Compose(samples, [], null).Single(item => item.ShortLabel == "GPU");
+        Assert.Null(gpu.TemperatureCelsius);
+        Assert.Equal(12, gpu.UsagePercent);
+    }
+
+    [Fact]
+    public void Extra_adapters_are_added_when_the_sensor_library_did_not_see_them()
+    {
+        var cpuOnly = SampleMachine().Where(item => item.Kind == DeviceKind.Cpu && item.SensorName != "CPU Graphics").ToArray();
         var adapters = new[]
         {
-            new AdapterUsage(0xC581, 0, "Intel(R) UHD Graphics", GpuClass.Integrated, 6),
+            new AdapterUsage(1, 0, "Integrated graphics", GpuClass.Integrated, 6),
+            new AdapterUsage(2, 0, "Discrete graphics", GpuClass.Discrete, 15),
+        };
+        var readings = SensorCatalog.Compose(cpuOnly, adapters, null);
+        var igpu = readings.Single(item => item.ShortLabel == "iGPU");
+        var gpu = readings.Single(item => item.ShortLabel == "GPU");
+        Assert.Equal(6, igpu.UsagePercent);
+        Assert.Equal(58, igpu.TemperatureCelsius);
+        Assert.Equal(SensorSources.SharedPackage, igpu.TemperatureSource);
+        Assert.Equal(15, gpu.UsagePercent);
+        Assert.Null(gpu.TemperatureCelsius);
+    }
+
+    [Fact]
+    public void Several_devices_keep_the_first_label_bare()
+    {
+        var samples = new List<RawSensor>
+        {
+            Sample("/cpu/0", "Processor", DeviceKind.Cpu, GpuClass.None, "CPU Total", MetricKind.Load, 10),
+            Sample("/cpu/1", "Second processor", DeviceKind.Cpu, GpuClass.None, "CPU Total", MetricKind.Load, 20),
+            Sample("/gpu/integrated/0", "Integrated graphics", DeviceKind.Gpu, GpuClass.Integrated, "D3D 3D", MetricKind.Load, 1),
+            Sample("/gpu/integrated/1", "Second integrated graphics", DeviceKind.Gpu, GpuClass.Integrated, "D3D 3D", MetricKind.Load, 2),
+            Sample("/gpu/0", "Discrete graphics", DeviceKind.Gpu, GpuClass.Discrete, "GPU Core", MetricKind.Load, 3),
+            Sample("/gpu/1", "Second discrete graphics", DeviceKind.Gpu, GpuClass.Discrete, "GPU Core", MetricKind.Load, 4),
+        };
+        var readings = SensorCatalog.Compose(samples, [], null);
+        Assert.Equal(["CPU", "CPU 2"], readings.Where(item => item.Kind == DeviceKind.Cpu && item.IsPrimary).Select(item => item.ShortLabel).ToArray());
+        Assert.Equal(["iGPU", "iGPU 2"], readings.Where(item => item.GpuClass == GpuClass.Integrated).Select(item => item.ShortLabel).ToArray());
+        Assert.Equal(["GPU", "GPU 2"], readings.Where(item => item.GpuClass == GpuClass.Discrete).Select(item => item.ShortLabel).ToArray());
+    }
+
+    [Fact]
+    public void Each_integrated_gpu_follows_the_matching_processor_package()
+    {
+        var samples = new[]
+        {
+            Sample("/cpu/0", "Processor", DeviceKind.Cpu, GpuClass.None, "CPU Package", MetricKind.Temperature, 40),
+            Sample("/cpu/1", "Second processor", DeviceKind.Cpu, GpuClass.None, "CPU Package", MetricKind.Temperature, 70),
+            Sample("/gpu/integrated/0", "Integrated graphics", DeviceKind.Gpu, GpuClass.Integrated, "D3D 3D", MetricKind.Load, 1),
+            Sample("/gpu/integrated/1", "Second integrated graphics", DeviceKind.Gpu, GpuClass.Integrated, "D3D 3D", MetricKind.Load, 2),
+        };
+        var readings = SensorCatalog.Compose(samples, [], null);
+        Assert.Equal(40, readings.Single(item => item.ShortLabel == "iGPU").TemperatureCelsius);
+        Assert.Equal(70, readings.Single(item => item.ShortLabel == "iGPU 2").TemperatureCelsius);
+    }
+
+    [Fact]
+    public void Performance_counters_fill_missing_usage()
+    {
+        var samples = SampleMachine().Where(item =>
+            item.SensorName is not "CPU Total" and not "D3D 3D"
+            && !(item.Metric == MetricKind.Load && item.SensorName.StartsWith("CPU Core", StringComparison.Ordinal))).ToList();
+        samples.Add(Sample("/gpu/integrated/0", "Intel Graphics", DeviceKind.Gpu, GpuClass.Integrated, "GPU Core", MetricKind.Temperature, 49));
+        var adapters = new[]
+        {
+            new AdapterUsage(0xC581, 0, "Intel Graphics", GpuClass.Integrated, 6),
         };
         var readings = SensorCatalog.Compose(samples, adapters, 33);
         var cpu = readings.Single(item => item.IsPrimary && item.Kind == DeviceKind.Cpu);
@@ -135,8 +238,109 @@ public class MonitorLogicTests
                 new EngineSample("pid_2_luid_0x00000000_0x0000C581_phys_0_eng_0_engtype_3D", 25),
                 new EngineSample("pid_1_luid_0x00000000_0x0000C581_phys_0_eng_1_engtype_Copy", 90),
             ],
-            [new AdapterDescriptor(0xC581, 0, "Intel UHD", GpuClass.Integrated)]);
+            [new AdapterDescriptor(0xC581, 0, "Integrated graphics", GpuClass.Integrated)]);
         Assert.Equal(65, usage[0].UsagePercent);
+    }
+
+    [Fact]
+    public void Presentation_overrides_labels_and_visibility()
+    {
+        var id = "cpu:/cpu/0";
+        var map = PresentationMap.FromEntries(
+        [
+            new DevicePresentationEntry(id, "CPU", "Processor", "Pkg", "Main processor", VisibilityChoice.Hide, VisibilityChoice.Show),
+            new DevicePresentationEntry("cpu:/cpu/0:core:1", "Core 1", "Processor", "  ", null, VisibilityChoice.Show, VisibilityChoice.Default),
+        ]);
+        Assert.Equal("Pkg", map.ResolveShort(id, "CPU"));
+        Assert.Equal("Main processor", map.ResolveFull(id, "Processor"));
+        Assert.False(map.AppearsInList(id, true));
+        Assert.True(map.AppearsInDock(id, false));
+        Assert.Equal("Core 1", map.ResolveShort("cpu:/cpu/0:core:1", "Core 1"));
+        Assert.True(map.AppearsInList("cpu:/cpu/0:core:1", false));
+        Assert.False(map.AppearsInDock("cpu:/cpu/0:core:1", false));
+
+        var reading = SensorCatalog.Compose(SampleMachine(), [], null).Single(item => item.IsPrimary && item.Kind == DeviceKind.Cpu);
+        var shown = map.Apply(reading with { Id = id });
+        Assert.Equal("Pkg", shown.ShortLabel);
+        Assert.Equal("Main processor", shown.HardwareName);
+
+        var roundTrip = PresentationMap.Deserialize(map.Serialize());
+        Assert.Equal("Pkg", roundTrip.ResolveShort(id, "CPU"));
+        Assert.Equal(VisibilityChoice.Hide, roundTrip.Entries.Single(entry => entry.Id == id).List);
+        Assert.Equal(PresentationMap.Empty.Entries.Count, PresentationMap.Deserialize("not json").Entries.Count);
+    }
+
+    [Fact]
+    public void Long_custom_labels_are_trimmed()
+    {
+        var map = PresentationMap.FromEntries(
+        [
+            new DevicePresentationEntry("cpu:/cpu/0", "CPU", "Processor", new string('A', 80), new string('B', 200), VisibilityChoice.Default, VisibilityChoice.Default),
+        ]);
+        Assert.Equal(PresentationMap.MaxShortLabelLength, map.ResolveShort("cpu:/cpu/0", "CPU").Length);
+        Assert.Equal(PresentationMap.MaxFullNameLength, map.ResolveFull("cpu:/cpu/0", "Processor").Length);
+    }
+
+    [Fact]
+    public void Gpu_class_uses_library_type_and_dedicated_memory()
+    {
+        Assert.Equal(GpuClass.Integrated, GpuClassResolver.Resolve(new GpuClassSignals("GpuIntel", "IntelIntegratedGpu", "/gpu/0", null)));
+        Assert.Equal(GpuClass.Integrated, GpuClassResolver.Resolve(new GpuClassSignals("GpuAmd", "AmdGpu", "/gpu-integrated/0", null)));
+        Assert.Equal(GpuClass.Discrete, GpuClassResolver.Resolve(new GpuClassSignals("GpuIntel", "IntelDiscreteGpu", "/gpu/1", null)));
+        Assert.Equal(GpuClass.Integrated, GpuClassResolver.Resolve(new GpuClassSignals("GpuAmd", "AmdGpu", "/gpu-amd/0", 256L * 1024 * 1024)));
+        Assert.Equal(GpuClass.Discrete, GpuClassResolver.Resolve(new GpuClassSignals("GpuAmd", "AmdGpu", "/gpu-amd/1", 8L * 1024 * 1024 * 1024)));
+        Assert.Equal(GpuClass.Discrete, GpuClassResolver.Resolve(new GpuClassSignals("GpuNvidia", "NvidiaGpu", "/gpu-nvidia/0", 0)));
+        Assert.Equal(GpuClass.None, GpuClassResolver.Resolve(new GpuClassSignals("Motherboard", "Board", "/board/0", 0)));
+    }
+
+    [Fact]
+    public void Adapter_memory_matches_by_vendor()
+    {
+        var adapters = new[]
+        {
+            new AdapterDescriptor(1, 0, "First discrete", GpuClass.Discrete, 8L * 1024 * 1024 * 1024, DisplayVendors.Nvidia),
+            new AdapterDescriptor(2, 0, "Integrated graphics", GpuClass.Integrated, 0, DisplayVendors.Amd),
+        };
+        var match = LibraryAdapterMatch.Match("GpuAmd", "Graphics", adapters);
+        Assert.NotNull(match);
+        Assert.Equal(DisplayVendors.Amd, match.VendorId);
+        Assert.Equal(0ul, match.DedicatedVideoBytes);
+    }
+
+    [Fact]
+    public void Pipe_get_round_trips_and_rejects_other_operations()
+    {
+        var request = SensorPipeProtocol.EncodeGetRequest();
+        var response = SensorPipeProtocol.Handle(request, () => new SensorReadResult(SampleMachine().Take(1).ToArray(), null));
+        Assert.True(SensorPipeProtocol.TryParseSnapshot(response, out var snapshot, out var error));
+        Assert.Null(error);
+        Assert.NotNull(snapshot);
+        Assert.True(snapshot.Ok);
+        Assert.Equal(SensorServiceContract.PipeName, "Ondery.HWMonitor.Sensors");
+        Assert.Equal("HWMonitorSensorService", SensorServiceContract.ServiceName);
+        Assert.Equal("HW Monitor Sensor Service", SensorServiceContract.DisplayName);
+        Assert.Single(snapshot.Sensors);
+        Assert.Equal(27, snapshot.Sensors[0].Value);
+
+        var denied = Encoding.UTF8.GetBytes("{\"v\":1,\"op\":\"set\"}");
+        var deniedResponse = SensorPipeProtocol.Handle(denied, () => throw new InvalidOperationException("must not read"));
+        Assert.True(SensorPipeProtocol.TryParseSnapshot(deniedResponse, out var failed, out _));
+        Assert.False(failed!.Ok);
+        Assert.Equal(SensorServiceContract.UnsupportedOperation, failed.Error);
+        Assert.Empty(failed.Sensors);
+
+        using var stream = new MemoryStream();
+        SensorPipeFrames.Write(stream, request);
+        stream.Position = 0;
+        Assert.True(SensorPipeFrames.TryRead(stream, out var frame, out var frameError));
+        Assert.Null(frameError);
+        Assert.Equal(request, frame);
+
+        using var broken = new MemoryStream();
+        broken.Write(new byte[] { 0xFF, 0xFF, 0xFF, 0x7F });
+        broken.Position = 0;
+        Assert.False(SensorPipeFrames.TryRead(broken, out _, out var lengthError));
+        Assert.False(string.IsNullOrWhiteSpace(lengthError));
     }
 
     [Fact]
@@ -192,66 +396,20 @@ public class MonitorLogicTests
         Assert.Equal(AutoCoolAction.None, controller.Evaluate(options, true, false, 40, start.AddSeconds(40)));
     }
 
-    [Fact]
-    public void Fan_cycle_skips_disabled_modes_and_returns_to_auto()
-    {
-        Assert.True(FanModeSet.TryCreate(
-            [
-                ("Silent", "20", true),
-                ("Quiet", "40", false),
-                ("Balanced", "60", true),
-                ("Performance", "80", true),
-                ("Max", "100", false),
-            ],
-            out var set,
-            out var error));
-        Assert.Null(error);
-        Assert.Equal(0, FanModeSet.Advance(-1, set));
-        Assert.Equal(2, FanModeSet.Advance(0, set));
-        Assert.Equal(3, FanModeSet.Advance(2, set));
-        Assert.Equal(-1, FanModeSet.Advance(3, set));
-    }
-
-    [Fact]
-    public void Fan_modes_require_two_enabled_entries()
-    {
-        var ok = FanModeSet.TryCreate(
-            [("Only", "10", true), ("Off", "20", false), ("Off 2", "30", false), ("Off 3", "40", false), ("Off 4", "50", false)],
-            out _,
-            out var error);
-        Assert.False(ok);
-        Assert.Equal(FanModeSet.TooFewEnabledMessage, error);
-    }
-
-    [Fact]
-    public void Msi_creator_z16_a11uet_is_not_allow_listed_for_duty_writes()
-    {
-        var decision = MsiEcPolicy.Evaluate(true, "Creator Z16 A11UET");
-        Assert.Equal(MsiEcDecisionKind.NotListed, decision.Kind);
-        Assert.Contains("A11UET", decision.Detail, StringComparison.Ordinal);
-        Assert.DoesNotContain("write register", decision.Detail, StringComparison.OrdinalIgnoreCase);
-
-        var off = MsiEcPolicy.Evaluate(false, "Creator Z16 A11UET");
-        Assert.Equal(MsiEcDecisionKind.Disabled, off.Kind);
-
-        var related = MsiEcPolicy.Evaluate(true, "MSI Creator Z16 A11UE");
-        Assert.Equal(MsiEcDecisionKind.DutyUnsupported, related.Kind);
-    }
-
-    private static IReadOnlyList<RawSensor> LaptopSamples() =>
+    private static IReadOnlyList<RawSensor> SampleMachine() =>
     [
-        Sample("/intelcpu/0", "Intel Core i7-11800H", DeviceKind.Cpu, GpuClass.None, "CPU Total", MetricKind.Load, 27),
-        Sample("/intelcpu/0", "Intel Core i7-11800H", DeviceKind.Cpu, GpuClass.None, "CPU Package", MetricKind.Temperature, 58),
-        Sample("/intelcpu/0", "Intel Core i7-11800H", DeviceKind.Cpu, GpuClass.None, "CPU Core #1", MetricKind.Load, 22),
-        Sample("/intelcpu/0", "Intel Core i7-11800H", DeviceKind.Cpu, GpuClass.None, "CPU Core #1", MetricKind.Temperature, 55),
-        Sample("/intelcpu/0", "Intel Core i7-11800H", DeviceKind.Cpu, GpuClass.None, "CPU Core #2", MetricKind.Load, 31),
-        Sample("/intelcpu/0", "Intel Core i7-11800H", DeviceKind.Cpu, GpuClass.None, "CPU Core #2", MetricKind.Temperature, 61),
-        Sample("/intelcpu/0", "Intel Core i7-11800H", DeviceKind.Cpu, GpuClass.None, "CPU Graphics", MetricKind.Temperature, 49),
-        Sample("/gpu-intel-integrated/0", "Intel UHD Graphics", DeviceKind.Gpu, GpuClass.Integrated, "D3D 3D", MetricKind.Load, 4),
-        Sample("/nvidiagpu/0", "NVIDIA GeForce RTX 3060 Laptop GPU", DeviceKind.Gpu, GpuClass.Discrete, "GPU Core", MetricKind.Load, 12),
-        Sample("/nvidiagpu/0", "NVIDIA GeForce RTX 3060 Laptop GPU", DeviceKind.Gpu, GpuClass.Discrete, "D3D 3D", MetricKind.Load, 8),
-        Sample("/nvidiagpu/0", "NVIDIA GeForce RTX 3060 Laptop GPU", DeviceKind.Gpu, GpuClass.Discrete, "GPU Core", MetricKind.Temperature, 51),
-        Sample("/nvidiagpu/0", "NVIDIA GeForce RTX 3060 Laptop GPU", DeviceKind.Gpu, GpuClass.Discrete, "GPU Hot Spot", MetricKind.Temperature, 63),
+        Sample("/cpu/0", "Processor", DeviceKind.Cpu, GpuClass.None, "CPU Total", MetricKind.Load, 27),
+        Sample("/cpu/0", "Processor", DeviceKind.Cpu, GpuClass.None, "CPU Package", MetricKind.Temperature, 58),
+        Sample("/cpu/0", "Processor", DeviceKind.Cpu, GpuClass.None, "CPU Core #1", MetricKind.Load, 22),
+        Sample("/cpu/0", "Processor", DeviceKind.Cpu, GpuClass.None, "CPU Core #1", MetricKind.Temperature, 55),
+        Sample("/cpu/0", "Processor", DeviceKind.Cpu, GpuClass.None, "CPU Core #2", MetricKind.Load, 31),
+        Sample("/cpu/0", "Processor", DeviceKind.Cpu, GpuClass.None, "CPU Core #2", MetricKind.Temperature, 61),
+        Sample("/cpu/0", "Processor", DeviceKind.Cpu, GpuClass.None, "CPU Graphics", MetricKind.Temperature, 49),
+        Sample("/gpu/integrated/0", "Integrated graphics", DeviceKind.Gpu, GpuClass.Integrated, "D3D 3D", MetricKind.Load, 4),
+        Sample("/gpu/0", "Discrete graphics", DeviceKind.Gpu, GpuClass.Discrete, "GPU Core", MetricKind.Load, 12),
+        Sample("/gpu/0", "Discrete graphics", DeviceKind.Gpu, GpuClass.Discrete, "D3D 3D", MetricKind.Load, 8),
+        Sample("/gpu/0", "Discrete graphics", DeviceKind.Gpu, GpuClass.Discrete, "GPU Core", MetricKind.Temperature, 51),
+        Sample("/gpu/0", "Discrete graphics", DeviceKind.Gpu, GpuClass.Discrete, "GPU Hot Spot", MetricKind.Temperature, 63),
     ];
 
     private static RawSensor Sample(string id, string name, DeviceKind kind, GpuClass gpuClass, string sensor, MetricKind metric, double value) =>

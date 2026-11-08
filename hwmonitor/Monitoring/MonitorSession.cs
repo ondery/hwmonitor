@@ -7,6 +7,7 @@ using HWMonitor.Core.Options;
 using HWMonitor.Core.Power;
 using HWMonitor.Core.Sensors;
 using HWMonitor.Core.Text;
+using HWMonitor.Hardware;
 using Microsoft.CommandPalette.Extensions;
 using Microsoft.CommandPalette.Extensions.Toolkit;
 
@@ -15,10 +16,10 @@ namespace HWMonitor;
 internal sealed class MonitorSession : IDisposable
 {
     private readonly SettingsManager _settings;
-    private readonly HardwareSession _hardware = new();
+    private readonly HardwareProbe _hardware = new(ExtensionLog.Write);
     private readonly WindowsUsageReader _usage = new();
+    private readonly SensorPipeClient _pipe = new();
     private readonly CoolModeService _cool;
-    private readonly FanControlService _fan;
     private readonly AutoCoolController _autoCool = new();
     private readonly SensorBoard _board;
     private readonly Timer _timer;
@@ -29,9 +30,8 @@ internal sealed class MonitorSession : IDisposable
     {
         _settings = settings;
         _cool = new CoolModeService(settings.SettingsDirectory);
-        _fan = new FanControlService(_hardware, settings.SettingsDirectory);
         Page = new SensorsPage();
-        _board = new SensorBoard(Page.Id, ToggleCool, CycleFan);
+        _board = new SensorBoard(Page.Id, ToggleCool);
         Band = new WrappedDockItem([], CommandIds.Dock, UiText.AppName);
         _settings.Changed += (_, _) =>
         {
@@ -52,7 +52,6 @@ internal sealed class MonitorSession : IDisposable
     public void Start()
     {
         _cool.RecoverOnStartup();
-        _fan.RecoverOnStartup();
         Tick();
         RestartTimer();
     }
@@ -74,8 +73,6 @@ internal sealed class MonitorSession : IDisposable
             {
                 _cool.Disable();
             }
-
-            _fan.RestoreToAuto();
         }
         catch (Exception ex)
         {
@@ -101,13 +98,6 @@ internal sealed class MonitorSession : IDisposable
         Tick();
     }
 
-    private void CycleFan()
-    {
-        var options = _settings.Current;
-        _fan.Cycle(options.Fans, options.ExperimentalMsiEc);
-        Tick();
-    }
-
     private void RestartTimer()
     {
         var period = _settings.Current.RefreshIntervalMs;
@@ -123,11 +113,30 @@ internal sealed class MonitorSession : IDisposable
 
         try
         {
-            var options = _settings.Current;
-            var sensors = _hardware.Read();
+            var serviceUp = _pipe.TryQuery(out var snapshot);
+            IReadOnlyList<RawSensor> sensors;
+            string? serviceError = null;
+            if (serviceUp && snapshot is { Ok: true })
+            {
+                sensors = snapshot.Sensors;
+                serviceError = snapshot.Error;
+                _hardware.Release();
+            }
+            else
+            {
+                sensors = _hardware.Read();
+                if (serviceUp)
+                {
+                    serviceError = snapshot?.Error;
+                }
+            }
+
             var (cpu, adapters) = _usage.Sample();
             var readings = SensorCatalog.Compose(sensors, adapters, cpu);
-            var package = readings.FirstOrDefault(reading => reading.Kind == DeviceKind.Cpu && reading.IsPrimary);
+            _settings.EnsureDevices(readings);
+            var options = _settings.Current;
+            var presented = readings.Select(options.Devices.Apply).ToArray();
+            var package = presented.FirstOrDefault(reading => reading.Kind == DeviceKind.Cpu && reading.IsPrimary);
             var action = _autoCool.Evaluate(options.AutoCool, _cool.IsOn, _cool.ActivatedByAuto, package?.TemperatureCelsius, DateTimeOffset.UtcNow);
             if (action == AutoCoolAction.Activate)
             {
@@ -138,14 +147,7 @@ internal sealed class MonitorSession : IDisposable
                 _cool.Disable();
             }
 
-            if (_fan.ModeIndex >= 0 && !options.Fans.EnabledIndexes().Contains(_fan.ModeIndex))
-            {
-                _fan.RestoreToAuto();
-            }
-
-            _fan.Observe(options.ExperimentalMsiEc);
-
-            var specs = BuildSpecs(readings, options);
+            var specs = BuildSpecs(presented, options, serviceUp, serviceError);
             var change = _board.Apply(specs);
             Page.Publish(_board.ListItems(), change.ListChanged);
             if (change.DockChanged)
@@ -163,49 +165,39 @@ internal sealed class MonitorSession : IDisposable
         }
     }
 
-    private List<RowSpec> BuildSpecs(IReadOnlyList<SensorReading> readings, MonitorOptions options)
+    private List<RowSpec> BuildSpecs(IReadOnlyList<SensorReading> readings, MonitorOptions options, bool serviceUp, string? serviceError)
     {
-        var specs = new List<RowSpec> { CoolSpec(), FanSpec(options) };
-        var primaries = readings.Where(reading => reading.IsPrimary).ToArray();
-        if (primaries.Length > 0 && primaries.All(reading => reading.TemperatureCelsius is null))
+        var specs = new List<RowSpec> { CoolSpec() };
+        var installHint = !serviceUp && readings.Any(TemperatureGaps.IsSharedDieGap);
+        var driverHint = serviceUp && readings.Any(TemperatureGaps.IsSharedDieGap);
+        if (installHint)
         {
-            specs.Add(new RowSpec(
-                CommandIds.Status,
-                UiText.StatusTempsTitle,
-                UiText.StatusTempsTitle,
-                UiText.StatusTempsSubtitle,
-                UiText.SectionStatus,
-                Glyphs.Status,
-                true,
-                false,
-                TemperatureBand.Unknown,
-                null,
-                true));
+            specs.Add(Status(CommandIds.Status, UiText.StatusServiceTitle, UiText.StatusServiceSubtitle));
+        }
+        else if (driverHint || (readings.Count > 0 && readings.Where(reading => reading.IsPrimary).All(reading => reading.TemperatureCelsius is null)))
+        {
+            var subtitle = string.IsNullOrWhiteSpace(serviceError)
+                ? UiText.StatusTempsSubtitle
+                : serviceError;
+            specs.Add(Status(CommandIds.Status, UiText.StatusTempsTitle, subtitle));
         }
 
         if (readings.Count == 0)
         {
-            specs.Add(new RowSpec(
-                CommandIds.Empty,
-                UiText.EmptyTitle,
-                UiText.EmptyTitle,
-                UiText.EmptySubtitle,
-                UiText.SectionStatus,
-                Glyphs.Status,
-                true,
-                false,
-                TemperatureBand.Unknown,
-                null,
-                true));
+            specs.Add(Status(CommandIds.Empty, UiText.EmptyTitle, UiText.EmptySubtitle));
         }
 
         foreach (var reading in readings)
         {
-            if (options.Compact && !reading.IsPrimary)
+            var defaultList = reading.IsPrimary || !options.Compact;
+            var defaultDock = reading.IsPrimary;
+            if (!options.Devices.AppearsInList(reading.Id, defaultList)
+                && !options.Devices.AppearsInDock(reading.Id, defaultDock))
             {
                 continue;
             }
 
+            var hideMissing = !serviceUp && TemperatureGaps.IsSharedDieGap(reading);
             var band = options.Colors.BandFor(reading.TemperatureCelsius);
             var color = band == TemperatureBand.Unknown ? (RgbColor?)null : options.Colors.ColorFor(band);
             var role = reading.Role switch
@@ -213,27 +205,50 @@ internal sealed class MonitorSession : IDisposable
                 SensorRole.HottestCore => UiText.RoleHottestCore,
                 SensorRole.Core => UiText.RoleCore(reading.CoreNumber ?? 0),
                 SensorRole.CpuGraphics => UiText.RoleCpuGraphics,
+                SensorRole.SharedPackage => UiText.RoleSharedPackage,
                 SensorRole.Adapter => UiText.RoleAdapter,
                 _ => UiText.RolePackage,
             };
-            var title = ReadingText.Format(UiText.ReadingFormat, reading.ShortLabel, reading.UsagePercent, reading.TemperatureCelsius, UiText.Unavailable, CultureInfo.CurrentCulture);
-            var subtitle = options.Compact ? reading.HardwareName : $"{reading.HardwareName} · {role}";
+            var culture = CultureInfo.CurrentCulture;
+            var listTitle = ReadingText.ListLine(reading.ShortLabel, reading.UsagePercent, reading.TemperatureCelsius, UiText.Unavailable, hideMissing, culture);
+            var listSubtitle = hideMissing ? UiText.StatusServiceTitle : $"{reading.HardwareName} · {role}";
+            var dockTitle = ReadingText.Value(reading.UsagePercent, reading.TemperatureCelsius, UiText.Unavailable, hideMissing, culture);
             specs.Add(new RowSpec(
                 SensorIds.ToCommandId(reading.Id),
-                title,
-                title,
-                subtitle,
+                dockTitle,
+                reading.ShortLabel,
+                listTitle,
+                listSubtitle,
                 reading.Kind == DeviceKind.Cpu ? UiText.SectionProcessors : UiText.SectionGraphics,
                 reading.Kind == DeviceKind.Cpu ? Glyphs.Cpu : Glyphs.Gpu,
-                true,
-                reading.IsPrimary,
+                options.Devices.AppearsInList(reading.Id, defaultList),
+                options.Devices.AppearsInDock(reading.Id, defaultDock),
                 band,
                 color,
-                true));
+                true,
+                ReadingText.SensorTitleSample,
+                reading.ShortLabel));
         }
 
         return specs;
     }
+
+    private static RowSpec Status(string id, string title, string subtitle) =>
+        new(
+            id,
+            title,
+            string.Empty,
+            title,
+            subtitle,
+            UiText.SectionStatus,
+            Glyphs.Status,
+            true,
+            false,
+            TemperatureBand.Unknown,
+            null,
+            true,
+            title,
+            " ");
 
     private RowSpec CoolSpec()
     {
@@ -242,8 +257,9 @@ internal sealed class MonitorSession : IDisposable
             ?? (on ? (_cool.ActivatedByAuto ? UiText.CoolAutoSubtitle : UiText.CoolOnSubtitle) : UiText.CoolOffSubtitle);
         return new RowSpec(
             CommandIds.Cool,
+            on ? UiText.CoolDockOn : UiText.CoolDockOff,
+            UiText.CoolDockLabel,
             on ? UiText.CoolOn : UiText.CoolOff,
-            UiText.CoolTitle,
             subtitle,
             UiText.SectionCooling,
             Glyphs.Cool,
@@ -251,66 +267,40 @@ internal sealed class MonitorSession : IDisposable
             true,
             TemperatureBand.Unknown,
             null,
-            false);
-    }
-
-    private RowSpec FanSpec(MonitorOptions options)
-    {
-        string dock;
-        string subtitle;
-        if (!_fan.Supported)
-        {
-            dock = "Fan unsupported";
-            subtitle = _fan.Detail ?? UiText.FanUnsupported;
-        }
-        else if (_settings.FanError is not null)
-        {
-            dock = UiText.FanAuto;
-            subtitle = _settings.FanError;
-        }
-        else if (_fan.ModeIndex < 0 || _fan.ModeIndex >= options.Fans.Modes.Count)
-        {
-            dock = UiText.FanAuto;
-            subtitle = UiText.FanFirmwareSubtitle;
-        }
-        else
-        {
-            var mode = options.Fans.Modes[_fan.ModeIndex];
-            dock = UiText.FanNamed(mode.Name);
-            subtitle = UiText.FanDuty(mode.DutyPercent, _fan.AppliedFans);
-        }
-
-        return new RowSpec(CommandIds.Fan, dock, UiText.FanTitle, subtitle, UiText.SectionCooling, Glyphs.Fan, true, true, TemperatureBand.Unknown, null, false);
+            false,
+            UiText.CoolDockOff,
+            UiText.CoolDockLabel);
     }
 }
 
 internal sealed record RowSpec(
     string CommandId,
     string DockTitle,
+    string DockSubtitle,
     string ListTitle,
-    string Subtitle,
+    string ListSubtitle,
     string Section,
     string Glyph,
     bool InList,
     bool InDock,
     TemperatureBand Band,
     RgbColor? Color,
-    bool OpensPage);
+    bool OpensPage,
+    string TitleSample,
+    string SubtitleSample);
 
 internal sealed class SensorBoard
 {
     private readonly Dictionary<string, BoundRow> _rows = new(StringComparer.Ordinal);
     private readonly string _pageId;
     private readonly Action _toggleCool;
-    private readonly Action _cycleFan;
     private List<string> _listOrder = [];
     private List<string> _dockOrder = [];
 
-    public SensorBoard(string pageId, Action toggleCool, Action cycleFan)
+    public SensorBoard(string pageId, Action toggleCool)
     {
         _pageId = pageId;
         _toggleCool = toggleCool;
-        _cycleFan = cycleFan;
     }
 
     public (bool ListChanged, bool DockChanged) Apply(IReadOnlyList<RowSpec> specs)
@@ -321,7 +311,7 @@ internal sealed class SensorBoard
             seen.Add(spec.CommandId);
             if (!_rows.TryGetValue(spec.CommandId, out var row))
             {
-                row = BoundRow.Create(spec, _pageId, _toggleCool, _cycleFan);
+                row = BoundRow.Create(spec, _pageId, _toggleCool);
                 _rows.Add(spec.CommandId, row);
             }
 
@@ -351,6 +341,9 @@ internal sealed class SensorBoard
 
 internal sealed class BoundRow
 {
+    private string _titleSample = string.Empty;
+    private string _subtitleSample = string.Empty;
+
     private BoundRow(ListItem list, ListItem dock)
     {
         List = list;
@@ -361,23 +354,27 @@ internal sealed class BoundRow
 
     public ListItem Dock { get; }
 
-    public static BoundRow Create(RowSpec spec, string pageId, Action toggleCool, Action cycleFan)
+    public static BoundRow Create(RowSpec spec, string pageId, Action toggleCool)
     {
-        var command = CreateCommand(spec, pageId, toggleCool, cycleFan);
+        var command = spec.CommandId == CommandIds.Cool
+            ? new CallbackCommand(spec.CommandId, UiText.CoolTitle, toggleCool)
+            : (ICommand)new OpenPageCommand(spec.CommandId, pageId, spec.DockSubtitle.Length == 0 ? spec.ListTitle : spec.DockSubtitle);
         var list = new ListItem(command) { Icon = new IconInfo(spec.Glyph) };
         var dock = new ListItem(command) { Icon = new IconInfo(spec.Glyph) };
-        RememberWidth(dock);
         return new BoundRow(list, dock);
     }
 
     public void Update(RowSpec spec)
     {
-        Set(List, spec.ListTitle, spec.Subtitle, spec.Section, spec);
-        var dockSubtitle = spec.Subtitle.StartsWith(UiText.FanUnsupported, StringComparison.Ordinal)
-            || spec.Subtitle == UiText.CoolFailed
-            ? spec.Subtitle
-            : string.Empty;
-        Set(Dock, spec.DockTitle, dockSubtitle, string.Empty, spec);
+        Set(List, spec.ListTitle, spec.ListSubtitle, spec.Section, spec);
+        Set(Dock, spec.DockTitle, spec.DockSubtitle, string.Empty, spec);
+        if (!string.Equals(_titleSample, spec.TitleSample, StringComparison.Ordinal)
+            || !string.Equals(_subtitleSample, spec.SubtitleSample, StringComparison.Ordinal))
+        {
+            ApplyDockLayout(Dock, spec.TitleSample, spec.SubtitleSample);
+            _titleSample = spec.TitleSample;
+            _subtitleSample = spec.SubtitleSample;
+        }
     }
 
     private static void Set(ListItem item, string title, string subtitle, string section, RowSpec spec)
@@ -425,26 +422,12 @@ internal sealed class BoundRow
         ];
     }
 
-    private static void RememberWidth(ListItem item)
+    private static void ApplyDockLayout(ListItem item, string titleSample, string subtitleSample)
     {
         var properties = item.GetProperties();
-        properties["Microsoft.CommandPalette.Dock.TabularDigits"] = true;
-        properties["Microsoft.CommandPalette.Dock.TitleWidth"] = "18ch";
-    }
-
-    private static ICommand CreateCommand(RowSpec spec, string pageId, Action toggleCool, Action cycleFan)
-    {
-        if (spec.CommandId == CommandIds.Cool)
-        {
-            return new CallbackCommand(spec.CommandId, UiText.CoolTitle, toggleCool);
-        }
-
-        if (spec.CommandId == CommandIds.Fan)
-        {
-            return new CallbackCommand(spec.CommandId, UiText.FanTitle, cycleFan);
-        }
-
-        return new OpenPageCommand(spec.CommandId, pageId, spec.DockTitle);
+        properties[DockProperties.TabularDigits] = true;
+        properties[DockProperties.TitleWidth] = DockProperties.Sample(titleSample);
+        properties[DockProperties.SubtitleWidth] = DockProperties.Sample(subtitleSample);
     }
 }
 
