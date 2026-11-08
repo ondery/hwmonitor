@@ -19,6 +19,9 @@ public static class Program
             var extensionDisposedEvent = new ManualResetEvent(false);
 
             // One extension instance is reused for every host activation.
+            // The process exits only after that instance is disposed. A crashed
+            // host cannot dispose it; the next activation keeps the same objects
+            // and must still receive live updates.
             HWMonitorExtension extensionInstance = new(extensionDisposedEvent);
             server.RegisterClass<HWMonitorExtension, IExtension>(() => extensionInstance);
             server.Start();

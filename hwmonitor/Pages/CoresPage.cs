@@ -37,13 +37,15 @@ internal sealed partial class CoresPage : ListPage
 
     public void SetTitle(string title)
     {
-        if (string.Equals(Title, title, StringComparison.Ordinal))
+        if (!string.Equals(Title, title, StringComparison.Ordinal))
         {
-            return;
+            HostNotify.Properties(this, () => Title = title, ["Title"]);
         }
 
-        Title = title;
-        Link.Title = title;
+        if (!string.Equals(Link.Title, title, StringComparison.Ordinal))
+        {
+            HostNotify.Properties(Link, () => Link.Title = title, ["Title"]);
+        }
     }
 
     public override IListItem[] GetItems() => _items;
@@ -53,7 +55,7 @@ internal sealed partial class CoresPage : ListPage
         _items = items.Length == 0 ? [_empty] : items;
         if (changed)
         {
-            RaiseItemsChanged(_items.Length);
+            HostNotify.Items(this, () => RaiseItemsChanged(_items.Length), _items.Length);
         }
     }
 }

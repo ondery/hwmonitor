@@ -3,6 +3,7 @@
 
 using System.Globalization;
 using HWMonitor.Core.Colors;
+using HWMonitor.Core.Notifications;
 using HWMonitor.Core.Options;
 using HWMonitor.Core.Power;
 using HWMonitor.Core.Sensors;
@@ -27,7 +28,6 @@ internal sealed class MonitorSession : IDisposable
     private readonly Timer _timer;
     private int _busy;
     private int _settingsGeneration;
-    private int _publishedGeneration;
     private bool _disposed;
 
     public MonitorSession(SettingsManager settings)
@@ -195,14 +195,11 @@ internal sealed class MonitorSession : IDisposable
 
             EnsureCorePages(specs);
             var change = _board.Apply(specs, _corePages);
-            var generation = Volatile.Read(ref _settingsGeneration);
-            var force = generation != _publishedGeneration;
-            _publishedGeneration = generation;
-            Page.Publish(_board.ListItems(), change.ListChanged || force);
+            Guard(() => Page.Publish(_board.ListItems(), change.ListChanged));
             PublishCorePages(specs);
-            if (change.DockChanged || force)
+            if (change.DockChanged)
             {
-                Band.Items = _board.DockItems();
+                Guard(() => PublishDock(_board.DockItems()));
             }
         }
         catch (Exception ex)
@@ -249,7 +246,8 @@ internal sealed class MonitorSession : IDisposable
             var signature = string.Join('\n', group.Select(spec => spec.CommandId));
             var changed = !_coreSignatures.TryGetValue(group.Key, out var previous) || !string.Equals(previous, signature, StringComparison.Ordinal);
             _coreSignatures[group.Key] = signature;
-            page.Publish(group.Select(spec => (IListItem)_board.ListItem(spec.CommandId)).ToArray(), changed);
+            var items = group.Select(spec => (IListItem)_board.ListItem(spec.CommandId)).ToArray();
+            Guard(() => page.Publish(items, changed));
         }
 
         foreach (var pair in _corePages)
@@ -265,7 +263,27 @@ internal sealed class MonitorSession : IDisposable
             }
 
             _coreSignatures[pair.Key] = string.Empty;
-            pair.Value.Publish([], true);
+            var page = pair.Value;
+            Guard(() => page.Publish([], true));
+        }
+    }
+
+    private void PublishDock(IListItem[] items)
+    {
+        // The host listens on the wrapped list page, not on the band item.
+        var list = Band.Command ?? Band;
+        HostNotify.Items(list, () => Band.Items = items, items.Length);
+    }
+
+    private static void Guard(Action action)
+    {
+        try
+        {
+            action();
+        }
+        catch (Exception ex)
+        {
+            ExtensionLog.Write(ex.Message);
         }
     }
 
@@ -470,7 +488,14 @@ internal sealed class SensorBoard
                 _rows.Add(spec.CommandId, row);
             }
 
-            row.Update(spec, corePages);
+            try
+            {
+                row.Update(spec, corePages);
+            }
+            catch (Exception ex)
+            {
+                ExtensionLog.Write(ex.Message);
+            }
         }
 
         foreach (var stale in _rows.Keys.Where(id => !seen.Contains(id)).ToArray())
@@ -498,20 +523,17 @@ internal sealed class SensorBoard
 
 internal sealed class BoundRow
 {
-    private string _listIcon;
-    private string _dockIcon;
-    private string _listBadge = string.Empty;
-    private string _dockBadge = string.Empty;
-
     private readonly ICommand _pageCommand;
+    private ShownText _listShown;
+    private ShownText _dockShown;
 
-    private BoundRow(ListItem list, ListItem dock, ICommand pageCommand, string listIcon, string dockIcon)
+    private BoundRow(ListItem list, ListItem dock, ICommand pageCommand, ShownText listShown, ShownText dockShown)
     {
         List = list;
         Dock = dock;
         _pageCommand = pageCommand;
-        _listIcon = listIcon;
-        _dockIcon = dockIcon;
+        _listShown = listShown;
+        _dockShown = dockShown;
     }
 
     public ListItem List { get; }
@@ -526,20 +548,104 @@ internal sealed class BoundRow
         var listCommand = ListCommand(spec, pageCommand, corePages);
         var list = new ListItem(listCommand) { Icon = new IconInfo(spec.ListIcon) };
         var dock = new ListItem(pageCommand) { Icon = new IconInfo(spec.DockIcon) };
-        return new BoundRow(list, dock, pageCommand, spec.ListIcon, spec.DockIcon);
+        return new BoundRow(
+            list,
+            dock,
+            pageCommand,
+            ShownText.Empty with { Icon = spec.ListIcon },
+            ShownText.Empty with { Icon = spec.DockIcon });
     }
 
     public void Update(RowSpec spec, IReadOnlyDictionary<string, CoresPage> corePages)
     {
         var listCommand = ListCommand(spec, _pageCommand, corePages);
-        if (!ReferenceEquals(List.Command, listCommand))
+        var badgeKey = BadgeKey(spec.Badge);
+        Push(
+            List,
+            ref _listShown,
+            new ShownText(spec.ListTitle, spec.ListSubtitle, spec.Section, spec.ListIcon, badgeKey, Suggest(spec.ListTitle, spec.ListSubtitle, spec.Badge)),
+            listCommand,
+            spec.Badge);
+        Push(
+            Dock,
+            ref _dockShown,
+            new ShownText(spec.DockTitle, spec.DockSubtitle, string.Empty, spec.DockIcon, string.Empty, string.Empty),
+            command: null,
+            badge: null);
+    }
+
+    private static void Push(ListItem item, ref ShownText shown, ShownText next, ICommand? command, StatusBadge? badge)
+    {
+        var changes = DisplayNotice.Compare(shown, next, command is not null && !ReferenceEquals(item.Command, command));
+        if (!changes.Any)
         {
-            List.Command = listCommand;
+            return;
         }
 
-        Set(List, spec.ListTitle, spec.ListSubtitle, spec.Section, spec.ListIcon, spec.Badge, ref _listIcon, ref _listBadge);
-        Set(Dock, spec.DockTitle, spec.DockSubtitle, string.Empty, spec.DockIcon, null, ref _dockIcon, ref _dockBadge);
+        var wrote = HostNotify.Properties(item, () =>
+        {
+            if (changes.Title)
+            {
+                item.Title = next.Title;
+            }
+
+            if (changes.Subtitle)
+            {
+                item.Subtitle = next.Subtitle;
+            }
+
+            if (changes.Section)
+            {
+                item.Section = next.Section;
+            }
+
+            if (changes.Command && command is not null)
+            {
+                item.Command = command;
+            }
+
+            if (changes.Icon)
+            {
+                item.Icon = new IconInfo(next.Icon);
+            }
+
+            if (changes.Tags)
+            {
+                item.Tags = TagsFor(badge);
+            }
+
+            if (changes.Suggest)
+            {
+                item.TextToSuggest = next.Suggest;
+            }
+        }, changes.Names());
+        if (wrote)
+        {
+            shown = next;
+        }
     }
+
+    private static string BadgeKey(StatusBadge? badge) =>
+        badge is StatusBadge shown
+            ? shown.Text + "|" + shown.Background.ToHex() + "|" + shown.Foreground.ToHex()
+            : string.Empty;
+
+    private static string Suggest(string title, string subtitle, StatusBadge? badge) =>
+        badge is StatusBadge extra
+            ? string.Join(' ', title, subtitle, extra.Text)
+            : string.Join(' ', title, subtitle);
+
+    private static ITag[] TagsFor(StatusBadge? badge) =>
+        badge is StatusBadge tag
+            ?
+            [
+                new Tag(tag.Text)
+                {
+                    Background = ColorHelpers.FromRgb(tag.Background.R, tag.Background.G, tag.Background.B),
+                    Foreground = ColorHelpers.FromRgb(tag.Foreground.R, tag.Foreground.G, tag.Foreground.B),
+                },
+            ]
+            : [];
 
     private static ICommand ListCommand(RowSpec spec, ICommand pageCommand, IReadOnlyDictionary<string, CoresPage> corePages)
     {
@@ -551,64 +657,6 @@ internal sealed class BoundRow
         }
 
         return pageCommand;
-    }
-
-    private static void Set(
-        ListItem item,
-        string title,
-        string subtitle,
-        string section,
-        string icon,
-        StatusBadge? badge,
-        ref string iconCache,
-        ref string badgeCache)
-    {
-        if (!string.Equals(item.Title, title, StringComparison.Ordinal))
-        {
-            item.Title = title;
-        }
-
-        if (!string.Equals(item.Subtitle, subtitle, StringComparison.Ordinal))
-        {
-            item.Subtitle = subtitle;
-        }
-
-        if (!string.Equals(item.Section, section, StringComparison.Ordinal))
-        {
-            item.Section = section;
-        }
-
-        if (!string.Equals(iconCache, icon, StringComparison.Ordinal))
-        {
-            item.Icon = new IconInfo(icon);
-            iconCache = icon;
-        }
-
-        var badgeKey = badge is StatusBadge shown
-            ? shown.Text + "|" + shown.Background.ToHex() + "|" + shown.Foreground.ToHex()
-            : string.Empty;
-        if (!string.Equals(badgeCache, badgeKey, StringComparison.Ordinal))
-        {
-            item.Tags = badge is StatusBadge tag
-                ?
-                [
-                    new Tag(tag.Text)
-                    {
-                        Background = ColorHelpers.FromRgb(tag.Background.R, tag.Background.G, tag.Background.B),
-                        Foreground = ColorHelpers.FromRgb(tag.Foreground.R, tag.Foreground.G, tag.Foreground.B),
-                    },
-                ]
-                : [];
-            badgeCache = badgeKey;
-        }
-
-        var suggest = badge is StatusBadge extra
-            ? string.Join(' ', title, subtitle, extra.Text)
-            : string.Join(' ', title, subtitle);
-        if (!string.Equals(item.TextToSuggest, suggest, StringComparison.Ordinal))
-        {
-            item.TextToSuggest = suggest;
-        }
     }
 }
 

@@ -15,7 +15,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version number (e.g., 0.2.1.0)'
+        description: 'Version number (e.g., 0.2.2.0)'
         required: true
         type: string
       release_tag:
@@ -51,7 +51,7 @@ jobs:
         run: |
           $version = $env:INPUT_VERSION.Trim()
           if ($version -notmatch '^\d+\.\d+\.\d+\.\d+$') {
-            throw "Version must have four parts, for example 0.2.1.0. Got '$version'."
+            throw "Version must have four parts, for example 0.2.2.0. Got '$version'."
           }
           $tag = $env:INPUT_TAG.Trim()
           if (-not $tag) { $tag = "$env:EXTENSION_NAME-v$version" }

@@ -43,7 +43,7 @@ internal sealed partial class MonitorSettingsForm : FormContent
         var json = SettingsCard.Build(_settings.FormState, _notice, _noticeWarning);
         if (!string.Equals(TemplateJson, json, StringComparison.Ordinal))
         {
-            TemplateJson = json;
+            HostNotify.Properties(this, () => TemplateJson = json, ["TemplateJson"]);
         }
     }
 
@@ -108,7 +108,7 @@ public sealed partial class MonitorCommandSettings : ICommandSettings
     internal MonitorCommandSettings(MonitorSettingsPage page, SettingsManager settings)
     {
         SettingsPage = page;
-        settings.Changed += (_, _) => SettingsChanged?.Invoke(this, this);
+        settings.Changed += (_, _) => HostNotify.Signal(this, nameof(SettingsChanged), this);
     }
 
     public IContentPage SettingsPage { get; }
