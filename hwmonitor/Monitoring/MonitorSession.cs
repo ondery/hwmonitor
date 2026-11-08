@@ -270,9 +270,9 @@ internal sealed class MonitorSession : IDisposable
 
     private void PublishDock(IListItem[] items)
     {
-        // The host listens on the wrapped list page, not on the band item.
-        var list = Band.Command ?? Band;
-        HostNotify.Items(list, () => Band.Items = items, items.Length);
+        // Command is the inner list page. WrappedDockItem itself is not an ICommand,
+        // and the host subscribes to ItemsChanged on that list.
+        HostNotify.Items(Band.Command, () => Band.Items = items, items.Length);
     }
 
     private static void Guard(Action action)
