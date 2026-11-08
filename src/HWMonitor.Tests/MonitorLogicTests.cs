@@ -231,6 +231,9 @@ public class MonitorLogicTests
             out var parsed));
         Assert.Equal(0xC581u, parsed.LuidLow);
         Assert.Equal("3D", parsed.EngineType);
+        Assert.True(GpuEngineUsage.Is3DEngine("pid_42_luid_0x00000000_0x0000C581_phys_0_eng_0_engtype_3D"));
+        Assert.False(GpuEngineUsage.Is3DEngine("pid_42_luid_0x00000000_0x0000C581_phys_0_eng_0_engtype_Copy"));
+        Assert.False(GpuEngineUsage.Is3DEngine("not-an-engine"));
 
         var usage = GpuEngineUsage.Aggregate(
             [

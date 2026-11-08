@@ -2,7 +2,7 @@
 ; build-exe.ps1 fills the version and architecture before compiling.
 ; Processor temperature needs the separate sensor service. See scripts/install-sensor-service.ps1.
 
-#define AppVersion "0.2.0.0"
+#define AppVersion "0.2.1.0"
 
 [Setup]
 AppId={{C9C07999-73E6-498F-AD96-049A06D708DE}

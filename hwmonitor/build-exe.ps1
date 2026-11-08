@@ -6,7 +6,7 @@
 param(
     [string]$ExtensionName = "HWMonitor",
     [string]$Configuration = "Release",
-    [string]$Version = "0.2.0.0",
+    [string]$Version = "0.2.1.0",
     [string[]]$Platforms = @("x64", "arm64")
 )
 

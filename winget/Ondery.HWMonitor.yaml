@@ -1,6 +1,6 @@
 # Draft version manifest. Submit with wingetcreate after the release assets exist.
 PackageIdentifier: Ondery.HWMonitor
-PackageVersion: 0.2.0.0
+PackageVersion: 0.2.1.0
 DefaultLocale: en-US
 ManifestType: version
 ManifestVersion: 1.10.0

@@ -30,9 +30,13 @@ internal sealed class SensorPipeClient
         catch (Exception ex)
         {
             ExtensionLog.Write(ex.Message);
-            _failures++;
-            var seconds = Math.Min(15, 2 * _failures);
-            _retryAfter = DateTimeOffset.UtcNow.AddSeconds(seconds);
+            if (_failures < 8)
+            {
+                _failures++;
+            }
+
+            var delayMs = FailureBackoff.DelayMs(_failures, 2_000, 15_000);
+            _retryAfter = DateTimeOffset.UtcNow.AddMilliseconds(delayMs);
             snapshot = null;
             return false;
         }
