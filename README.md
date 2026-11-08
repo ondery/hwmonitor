@@ -216,7 +216,7 @@ Requirements: .NET 10 SDK, Windows 10/11 SDK, and [Inno Setup 6](https://jrsoftw
 dotnet test src\HWMonitor.Tests\HWMonitor.Tests.csproj
 dotnet build hwmonitor.sln -c Release -p:Platform=x64
 cd hwmonitor
-.\build-exe.ps1 -Version 0.2.1.0
+.\build-exe.ps1 -Version 0.2.2.0
 ```
 
 The test project is plain .NET and does not need Windows. The extension, hardware reader, and sensor service target `net10.0-windows10.0.26100.0`. `EnableWindowsTargeting` is set so the Windows projects can compile on a non-Windows SDK when the targeting pack is installed. Run them on Windows.

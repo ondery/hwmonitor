@@ -25,10 +25,14 @@ internal sealed partial class SensorsPage : ListPage
     public void Publish(IListItem[] items, bool structureChanged)
     {
         _items = items;
-        IsLoading = false;
+        if (IsLoading)
+        {
+            HostNotify.Properties(this, () => IsLoading = false, ["IsLoading"]);
+        }
+
         if (structureChanged)
         {
-            RaiseItemsChanged(items.Length);
+            HostNotify.Items(this, () => RaiseItemsChanged(_items.Length), _items.Length);
         }
     }
 }

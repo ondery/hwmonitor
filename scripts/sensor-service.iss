@@ -11,7 +11,7 @@
 #define ServiceName "HWMonitorSensorService"
 #define DisplayName "HW Monitor Sensor Service"
 #define SourceDir "stage\win-x64"
-#define AppVersion "0.2.1.0"
+#define AppVersion "0.2.2.0"
 
 [Setup]
 AppId={{8F4B6E21-5C0A-4D33-9B17-6A2E0C8D4F90}
