@@ -424,10 +424,11 @@ internal sealed class BoundRow
 
     private static void ApplyDockLayout(ListItem item, string titleSample, string subtitleSample)
     {
-        var properties = item.GetProperties();
-        properties[DockProperties.TabularDigits] = true;
-        properties[DockProperties.TitleWidth] = DockProperties.Sample(titleSample);
-        properties[DockProperties.SubtitleWidth] = DockProperties.Sample(subtitleSample);
+        // Width and tabular-digit hints are not set: some Command Palette
+        // releases crash while measuring them. Labels size to their content.
+        _ = item;
+        _ = titleSample;
+        _ = subtitleSample;
     }
 }
 
