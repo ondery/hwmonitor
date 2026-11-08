@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows10.0.26100.0</TargetFramework>
+    <RootNamespace>HWMonitor.Hardware</RootNamespace>
+    <AssemblyName>HWMonitor.Hardware</AssemblyName>
+    <Description>Read-only CPU and GPU sensor access for HW Monitor.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\HWMonitor.Core\HWMonitor.Core.csproj" />
+    <PackageReference Include="LibreHardwareMonitorLib" />
+  </ItemGroup>
+</Project>

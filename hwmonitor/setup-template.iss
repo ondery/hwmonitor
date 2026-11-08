@@ -1,5 +1,6 @@
 ; Inno Setup script for the HW Monitor Command Palette extension.
 ; build-exe.ps1 fills the version and architecture before compiling.
+; Processor temperature needs the separate sensor service. See scripts/install-sensor-service.ps1.
 
 #define AppVersion "0.1.0.0"
 

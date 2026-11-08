@@ -9,7 +9,6 @@ internal static class CommandIds
     public const string Page = "com.ondery.hwmonitor.page";
     public const string Dock = "com.ondery.hwmonitor.dock";
     public const string Cool = "com.ondery.hwmonitor.cool";
-    public const string Fan = "com.ondery.hwmonitor.fan";
     public const string Status = "com.ondery.hwmonitor.status";
     public const string Empty = "com.ondery.hwmonitor.empty";
 }
@@ -20,6 +19,5 @@ internal static class Glyphs
     public const string Cpu = "\uEEA1";
     public const string Gpu = "\uE7FC";
     public const string Cool = "\uE708";
-    public const string Fan = "\uEC4A";
     public const string Status = "\uE7BA";
 }

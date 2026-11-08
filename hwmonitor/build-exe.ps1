@@ -94,6 +94,18 @@ foreach ($Platform in $Platforms) {
 
     $sizeMB = [math]::Round($installer.Length / 1MB, 2)
     Write-Host "Created $Platform installer: $($installer.Name) ($sizeMB MB)" -ForegroundColor Green
+
+    $serviceProject = Join-Path (Split-Path -Parent $ProjectDir) "src\HWMonitor.SensorService\HWMonitor.SensorService.csproj"
+    $serviceOut = Join-Path $ProjectDir "bin\$Configuration\sensor-service\win-$Platform"
+    Write-Host "Publishing the sensor service for $Platform..." -ForegroundColor Yellow
+    dotnet publish $serviceProject `
+        --configuration $Configuration `
+        --runtime "win-$Platform" `
+        --self-contained true `
+        --output $serviceOut
+    if ($LASTEXITCODE -ne 0) {
+        throw "Sensor service publish failed for $Platform with exit code $LASTEXITCODE"
+    }
 }
 
 Write-Host "`nBuild completed successfully." -ForegroundColor Green

@@ -8,6 +8,18 @@ namespace HWMonitor.Core.Sensors;
 
 public static partial class SensorCatalog
 {
+    private static readonly (string Name, string Source)[] PackageTemperatures =
+    [
+        ("CPU Package", SensorSources.Package),
+        ("Package", SensorSources.Package),
+        ("Core (Tctl/Tdie)", SensorSources.Package),
+        ("CPU (Tctl/Tdie)", SensorSources.Package),
+        ("Tctl/Tdie", SensorSources.Package),
+        ("CPU Die", SensorSources.Package),
+        ("Core Max", SensorSources.CoreMax),
+        ("CPU Core Max", SensorSources.CoreMax),
+    ];
+
     public static IReadOnlyList<SensorReading> Compose(
         IReadOnlyList<RawSensor> sensors,
         IReadOnlyList<AdapterUsage> adapters,
@@ -39,14 +51,24 @@ public static partial class SensorCatalog
             }
         }
 
-        ApplyCpuGraphicsTemperature(devices);
         ApplyUsageFallbacks(devices, adapters, processorUtilityPercent);
-
-        if (devices.Count == 0)
+        if (!devices.Any(device => device.Kind == DeviceKind.Cpu))
         {
-            devices.AddRange(SyntheticDevices(adapters, processorUtilityPercent));
+            var utility = SanitizeUsage(processorUtilityPercent, allowTurbo: true);
+            if (utility is not null)
+            {
+                devices.Add(new DeviceDraft(
+                    "cpu:usage",
+                    "Processor",
+                    DeviceKind.Cpu,
+                    GpuClass.None,
+                    [new ReadingDraft(true, null, SensorRole.Package, utility, null, SensorSources.ProcessorUtility, SensorSources.Unavailable)]));
+            }
         }
 
+        AddUnmatchedAdapters(devices, adapters);
+        ApplyCpuGraphicsTemperature(devices);
+        ApplySharedPackageTemperature(devices);
         AssignLabels(devices);
         return devices.SelectMany(device => device.Published).ToArray();
     }
@@ -54,18 +76,9 @@ public static partial class SensorCatalog
     private static DeviceDraft BuildCpu(HardwareGroup group)
     {
         var cores = new SortedDictionary<int, (double? Load, double? Temp)>();
+        var (package, packageSource) = PackageTemperature(group);
         double? total = Find(group, MetricKind.Load, "CPU Total");
-        double? package = Find(group, MetricKind.Temperature, "CPU Package");
-        var packageSource = package is null ? SensorSources.Unavailable : SensorSources.Package;
-        if (package is null)
-        {
-            package = Find(group, MetricKind.Temperature, "Core Max")
-                ?? Find(group, MetricKind.Temperature, "CPU Core Max");
-            if (package is not null)
-            {
-                packageSource = SensorSources.CoreMax;
-            }
-        }
+        var usageSource = SensorSources.Unavailable;
 
         foreach (var sample in group.Samples)
         {
@@ -88,7 +101,6 @@ public static partial class SensorCatalog
             cores[number] = pair;
         }
 
-        var usageSource = SensorSources.Unavailable;
         if (total is null && cores.Values.Any(pair => pair.Load is not null))
         {
             total = cores.Values.Where(pair => pair.Load is not null).Average(pair => pair.Load!.Value);
@@ -127,30 +139,33 @@ public static partial class SensorCatalog
                 pair.Temp is null ? SensorSources.Unavailable : SensorSources.Package));
         }
 
-        var draft = new DeviceDraft(group.Id, group.Name, DeviceKind.Cpu, GpuClass.None, readings)
+        return new DeviceDraft(group.Id, group.Name, DeviceKind.Cpu, GpuClass.None, readings)
         {
             CpuGraphicsCelsius = SanitizeTemperature(
                 Find(group, MetricKind.Temperature, "CPU Graphics")
                 ?? Find(group, MetricKind.Temperature, "GPU Graphics")),
         };
-        return draft;
     }
 
     private static DeviceDraft BuildGpu(HardwareGroup group)
     {
-        var coreLoad = Find(group, MetricKind.Load, "GPU Core");
-        var d3dLoad = Find(group, MetricKind.Load, "D3D 3D");
-        var load = coreLoad ?? d3dLoad;
-        var loadSource = coreLoad is not null
-            ? SensorSources.GpuCore
-            : d3dLoad is not null ? SensorSources.D3D : SensorSources.Unavailable;
+        var (load, loadName) = FindNamed(group, MetricKind.Load, "GPU Core", "D3D 3D", "GPU");
+        var loadSource = loadName switch
+        {
+            "GPU Core" => SensorSources.GpuCore,
+            "D3D 3D" => SensorSources.D3D,
+            "GPU" => SensorSources.GpuCore,
+            _ => SensorSources.Unavailable,
+        };
 
-        var coreTemp = Find(group, MetricKind.Temperature, "GPU Core");
-        var hotSpot = Find(group, MetricKind.Temperature, "GPU Hot Spot");
-        var temp = coreTemp ?? hotSpot;
-        var tempSource = coreTemp is not null
-            ? SensorSources.GpuCore
-            : hotSpot is not null ? SensorSources.HotSpot : SensorSources.Unavailable;
+        var (temp, tempName) = FindNamed(group, MetricKind.Temperature, "GPU Core", "GPU Hot Spot", "GPU Temperature");
+        var tempSource = tempName switch
+        {
+            "GPU Core" => SensorSources.GpuCore,
+            "GPU Hot Spot" => SensorSources.HotSpot,
+            "GPU Temperature" => SensorSources.GpuCore,
+            _ => SensorSources.Unavailable,
+        };
 
         return new DeviceDraft(
             group.Id,
@@ -164,28 +179,56 @@ public static partial class SensorCatalog
 
     private static void ApplyCpuGraphicsTemperature(List<DeviceDraft> devices)
     {
-        var graphics = devices
-            .Where(device => device.Kind == DeviceKind.Cpu)
-            .Select(device => device.CpuGraphicsCelsius)
-            .FirstOrDefault(value => value is not null);
-
-        if (graphics is null)
+        var cpus = devices.Where(device => device.Kind == DeviceKind.Cpu).ToList();
+        var integrated = devices.Where(device => device.Kind == DeviceKind.Gpu && device.GpuClass == GpuClass.Integrated).ToList();
+        for (var i = 0; i < integrated.Count; i++)
         {
-            return;
-        }
-
-        foreach (var device in devices.Where(item => item.Kind == DeviceKind.Gpu && item.GpuClass == GpuClass.Integrated))
-        {
-            var primary = device.Readings[0];
-            if (primary.TemperatureCelsius is null)
+            var primary = integrated[i].Readings[0];
+            if (primary.TemperatureCelsius is not null || cpus.Count == 0)
             {
-                device.Readings[0] = primary with
-                {
-                    TemperatureCelsius = graphics,
-                    TemperatureSource = SensorSources.CpuGraphics,
-                    Role = SensorRole.CpuGraphics,
-                };
+                continue;
             }
+
+            var cpu = i < cpus.Count ? cpus[i] : cpus[0];
+            if (cpu.CpuGraphicsCelsius is null)
+            {
+                continue;
+            }
+
+            integrated[i].Readings[0] = primary with
+            {
+                TemperatureCelsius = cpu.CpuGraphicsCelsius,
+                TemperatureSource = SensorSources.CpuGraphics,
+                Role = SensorRole.CpuGraphics,
+            };
+        }
+    }
+
+    private static void ApplySharedPackageTemperature(List<DeviceDraft> devices)
+    {
+        var cpus = devices.Where(device => device.Kind == DeviceKind.Cpu).ToList();
+        var integrated = devices.Where(device => device.Kind == DeviceKind.Gpu && device.GpuClass == GpuClass.Integrated).ToList();
+        for (var i = 0; i < integrated.Count; i++)
+        {
+            var primary = integrated[i].Readings[0];
+            if (primary.TemperatureCelsius is not null || cpus.Count == 0)
+            {
+                continue;
+            }
+
+            var cpu = i < cpus.Count ? cpus[i] : cpus[0];
+            var package = cpu.Readings[0].TemperatureCelsius;
+            if (package is null)
+            {
+                continue;
+            }
+
+            integrated[i].Readings[0] = primary with
+            {
+                TemperatureCelsius = package,
+                TemperatureSource = SensorSources.SharedPackage,
+                Role = SensorRole.SharedPackage,
+            };
         }
     }
 
@@ -209,16 +252,21 @@ public static partial class SensorCatalog
         }
 
         var used = new HashSet<int>();
-        var gpus = devices.Where(item => item.Kind == DeviceKind.Gpu).ToArray();
-        foreach (var gpu in gpus)
+        foreach (var gpu in devices.Where(item => item.Kind == DeviceKind.Gpu))
         {
             var primary = gpu.Readings[0];
             if (primary.UsagePercent is not null)
             {
+                var occupied = MatchAdapter(gpu.Name, gpu.GpuClass, adapters, used, allowSingleLeftover: false);
+                if (occupied >= 0)
+                {
+                    used.Add(occupied);
+                }
+
                 continue;
             }
 
-            var index = MatchAdapter(gpu.Name, gpu.GpuClass, adapters, used);
+            var index = MatchAdapter(gpu.Name, gpu.GpuClass, adapters, used, allowSingleLeftover: true);
             if (index < 0)
             {
                 continue;
@@ -239,7 +287,49 @@ public static partial class SensorCatalog
         }
     }
 
-    private static int MatchAdapter(string hardwareName, GpuClass gpuClass, IReadOnlyList<AdapterUsage> adapters, HashSet<int> used)
+    private static void AddUnmatchedAdapters(List<DeviceDraft> devices, IReadOnlyList<AdapterUsage> adapters)
+    {
+        var gpuCount = devices.Count(device => device.Kind == DeviceKind.Gpu);
+        if (adapters.Count <= gpuCount)
+        {
+            return;
+        }
+
+        var used = new HashSet<int>();
+        var paired = 0;
+        foreach (var gpu in devices.Where(device => device.Kind == DeviceKind.Gpu))
+        {
+            var index = MatchAdapter(gpu.Name, gpu.GpuClass, adapters, used, allowSingleLeftover: true);
+            if (index >= 0)
+            {
+                used.Add(index);
+                paired++;
+            }
+        }
+
+        if (paired < gpuCount)
+        {
+            return;
+        }
+
+        for (var i = 0; i < adapters.Count; i++)
+        {
+            if (used.Contains(i))
+            {
+                continue;
+            }
+
+            var adapter = adapters[i];
+            devices.Add(new DeviceDraft(
+                $"gpu:luid:{adapter.LuidHigh:X8}:{adapter.LuidLow:X8}",
+                string.IsNullOrWhiteSpace(adapter.Name) ? "Graphics adapter" : adapter.Name,
+                DeviceKind.Gpu,
+                adapter.GpuClass,
+                [new ReadingDraft(true, null, SensorRole.Adapter, SanitizeUsage(adapter.UsagePercent), null, adapter.UsagePercent is null ? SensorSources.Unavailable : SensorSources.GpuEngine, SensorSources.Unavailable)]));
+        }
+    }
+
+    private static int MatchAdapter(string hardwareName, GpuClass gpuClass, IReadOnlyList<AdapterUsage> adapters, HashSet<int> used, bool allowSingleLeftover)
     {
         var bestIndex = -1;
         var bestScore = 0;
@@ -261,6 +351,11 @@ public static partial class SensorCatalog
         if (bestIndex >= 0 && bestScore >= 5)
         {
             return bestIndex;
+        }
+
+        if (!allowSingleLeftover)
+        {
+            return -1;
         }
 
         var leftovers = Enumerable.Range(0, adapters.Count)
@@ -285,54 +380,32 @@ public static partial class SensorCatalog
         return score;
     }
 
-    private static IEnumerable<DeviceDraft> SyntheticDevices(IReadOnlyList<AdapterUsage> adapters, double? processorUtilityPercent)
-    {
-        var utility = SanitizeUsage(processorUtilityPercent, allowTurbo: true);
-        if (utility is not null)
-        {
-            yield return new DeviceDraft(
-                "cpu:usage",
-                "Processor",
-                DeviceKind.Cpu,
-                GpuClass.None,
-                [new ReadingDraft(true, null, SensorRole.Package, utility, null, SensorSources.ProcessorUtility, SensorSources.Unavailable)]);
-        }
-
-        for (var i = 0; i < adapters.Count; i++)
-        {
-            var adapter = adapters[i];
-            yield return new DeviceDraft(
-                $"gpu:luid:{adapter.LuidHigh:X8}:{adapter.LuidLow:X8}",
-                string.IsNullOrWhiteSpace(adapter.Name) ? "Graphics adapter" : adapter.Name,
-                DeviceKind.Gpu,
-                adapter.GpuClass,
-                [new ReadingDraft(true, null, SensorRole.Adapter, SanitizeUsage(adapter.UsagePercent), null, adapter.UsagePercent is null ? SensorSources.Unavailable : SensorSources.GpuEngine, SensorSources.Unavailable)]);
-        }
-    }
-
     private static void AssignLabels(List<DeviceDraft> devices)
     {
         var cpus = devices.Where(device => device.Kind == DeviceKind.Cpu).ToArray();
         var integrated = devices.Where(device => device.Kind == DeviceKind.Gpu && device.GpuClass == GpuClass.Integrated).ToArray();
         var discrete = devices.Where(device => device.Kind == DeviceKind.Gpu && device.GpuClass != GpuClass.Integrated).ToArray();
-        LabelGroup(cpus, "CPU");
-        LabelGroup(integrated, "iGPU");
-        LabelGroup(discrete, "GPU");
+        LabelGroup(cpus, "CPU", cpus.Length);
+        LabelGroup(integrated, "iGPU", 1);
+        LabelGroup(discrete, "GPU", 1);
     }
 
-    private static void LabelGroup(IReadOnlyList<DeviceDraft> devices, string stem)
+    private static void LabelGroup(IReadOnlyList<DeviceDraft> devices, string stem, int cpuCount)
     {
         for (var i = 0; i < devices.Count; i++)
         {
-            var label = devices.Count == 1 ? stem : $"{stem} {i + 1}";
+            var label = devices.Count <= 1 || i == 0 ? stem : $"{stem} {i + 1}";
             var readings = new List<SensorReading>();
             foreach (var draft in devices[i].Readings)
             {
-                var shortLabel = draft.Role == SensorRole.Core ? $"Core {draft.CoreNumber}" : label;
+                var shortLabel = draft.Role == SensorRole.Core
+                    ? cpuCount > 1 ? $"{label} Core {draft.CoreNumber}" : $"Core {draft.CoreNumber}"
+                    : label;
+                var prefix = devices[i].Kind == DeviceKind.Cpu ? "cpu" : "gpu";
                 readings.Add(new SensorReading(
                     draft.Role == SensorRole.Core
-                        ? $"{(devices[i].Kind == DeviceKind.Cpu ? "cpu" : "gpu")}:{devices[i].Id}:core:{draft.CoreNumber}"
-                        : $"{(devices[i].Kind == DeviceKind.Cpu ? "cpu" : "gpu")}:{devices[i].Id}",
+                        ? $"{prefix}:{devices[i].Id}:core:{draft.CoreNumber}"
+                        : $"{prefix}:{devices[i].Id}",
                     devices[i].Id,
                     devices[i].Kind,
                     devices[i].GpuClass,
@@ -349,6 +422,42 @@ public static partial class SensorCatalog
 
             devices[i].Published = readings;
         }
+    }
+
+    private static (double? Value, string Source) PackageTemperature(HardwareGroup group)
+    {
+        foreach (var (name, source) in PackageTemperatures)
+        {
+            var value = SanitizeTemperature(Find(group, MetricKind.Temperature, name));
+            if (value is not null)
+            {
+                return (value, source);
+            }
+        }
+
+        var fuzzy = group.Samples.FirstOrDefault(sample =>
+            sample.Metric == MetricKind.Temperature
+            && (sample.SensorName.Contains("Package", StringComparison.OrdinalIgnoreCase)
+                || sample.SensorName.Contains("Tctl", StringComparison.OrdinalIgnoreCase)
+                || sample.SensorName.Contains("Tdie", StringComparison.OrdinalIgnoreCase)));
+        var fuzzyValue = fuzzy is null ? null : SanitizeTemperature(fuzzy.Value);
+        return fuzzyValue is null
+            ? (null, SensorSources.Unavailable)
+            : (fuzzyValue, SensorSources.Package);
+    }
+
+    private static (double? Value, string? Name) FindNamed(HardwareGroup group, MetricKind metric, params string[] names)
+    {
+        foreach (var name in names)
+        {
+            var value = Find(group, metric, name);
+            if (value is not null)
+            {
+                return (value, name);
+            }
+        }
+
+        return (null, null);
     }
 
     private static double? Find(HardwareGroup group, MetricKind metric, string name)
@@ -399,20 +508,20 @@ public static partial class SensorCatalog
             return "amd";
         }
 
-        if (tokens.Overlaps(["intel", "uhd", "iris"]))
-        {
-            return "intel";
-        }
-
         if (tokens.Contains("arc"))
         {
             return "intel-arc";
         }
 
+        if (tokens.Overlaps(["intel", "iris"]))
+        {
+            return "intel";
+        }
+
         return null;
     }
 
-    [GeneratedRegex(@"^CPU Core #(\d+)$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"^(?:CPU )?Core #(\d+)$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex CoreName();
 
     [GeneratedRegex(@"[^a-z0-9]+", RegexOptions.CultureInvariant)]

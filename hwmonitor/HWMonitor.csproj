@@ -25,6 +25,8 @@
     <Product>HW Monitor</Product>
     <Copyright>Copyright (c) 2026 Ondery</Copyright>
     <Description>Live CPU and GPU usage and temperature for Command Palette.</Description>
+    <IncludePackagedSensorService Condition="'$(IncludePackagedSensorService)' == ''">false</IncludePackagedSensorService>
+    <AppxManifest Condition="'$(IncludePackagedSensorService)' == 'true'">$(MSBuildProjectDirectory)\Package.with-service.appxmanifest</AppxManifest>
     <PublishSingleFile>false</PublishSingleFile>
     <SelfContained>true</SelfContained>
     <PublishTrimmed>false</PublishTrimmed>
@@ -35,13 +37,13 @@
 
   <ItemGroup>
     <ProjectReference Include="..\src\HWMonitor.Core\HWMonitor.Core.csproj" />
+    <ProjectReference Include="..\src\HWMonitor.Hardware\HWMonitor.Hardware.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.CommandPalette.Extensions" />
     <PackageReference Include="Microsoft.Windows.CsWinRT" />
     <PackageReference Include="Shmuelie.WinRTServer" />
-    <PackageReference Include="LibreHardwareMonitorLib" />
     <PackageReference Include="System.Diagnostics.PerformanceCounter" />
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools.MSIX">
       <PrivateAssets>all</PrivateAssets>
@@ -58,5 +60,12 @@
 
   <ItemGroup Condition="'$(DisableMsixProjectCapabilityAddedByProject)'!='true' and '$(EnableMsixTooling)'=='true'">
     <ProjectCapability Include="Msix" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(IncludePackagedSensorService)' == 'true' and '$(SensorServicePublishDir)' != ''">
+    <Content Include="$(SensorServicePublishDir)\**\*.*">
+      <Link>%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
 </Project>

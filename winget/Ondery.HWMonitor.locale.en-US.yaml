@@ -13,8 +13,8 @@ Copyright: Copyright (c) 2026 Ondery
 ShortDescription: Live CPU and GPU usage and temperature for Command Palette
 Description: |-
   HW Monitor is a Command Palette extension that shows live usage and temperature
-  for every detected processor and graphics adapter, with dock items, Cool Mode,
-  and fan-mode cycling.
+  for every detected processor and graphics adapter, with dock items and Cool Mode.
+  Package temperature is read by an optional local service.
 Moniker: hwmonitor
 Tags:
 - windows-commandpalette-extension

@@ -29,6 +29,7 @@ public enum SensorRole
     Core,
     Adapter,
     CpuGraphics,
+    SharedPackage,
 }
 
 public sealed record RawSensor(
@@ -46,6 +47,14 @@ public sealed record AdapterUsage(
     string Name,
     GpuClass GpuClass,
     double? UsagePercent);
+
+public sealed record AdapterDescriptor(
+    uint LuidLow,
+    uint LuidHigh,
+    string Name,
+    GpuClass GpuClass,
+    ulong DedicatedVideoBytes = 0,
+    uint VendorId = 0);
 
 public sealed record SensorReading(
     string Id,
@@ -75,5 +84,13 @@ public static class SensorSources
     public const string HottestCore = "hottest-core";
     public const string HotSpot = "hot-spot";
     public const string CpuGraphics = "cpu-graphics";
+    public const string SharedPackage = "cpu-package";
     public const string Unavailable = "unavailable";
+}
+
+public static class DisplayVendors
+{
+    public const uint Nvidia = 0x10DE;
+    public const uint Amd = 0x1002;
+    public const uint Intel = 0x8086;
 }

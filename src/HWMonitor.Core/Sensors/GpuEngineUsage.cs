@@ -16,8 +16,6 @@ public readonly record struct GpuEngineInstance(
 
 public sealed record EngineSample(string InstanceName, double UtilizationPercent);
 
-public sealed record AdapterDescriptor(uint LuidLow, uint LuidHigh, string Name, GpuClass GpuClass);
-
 public static partial class GpuEngineUsage
 {
     public static bool TryParse(string instanceName, out GpuEngineInstance instance)

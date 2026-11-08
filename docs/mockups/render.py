@@ -61,6 +61,7 @@ def shot(name: str, html: str, width: int, height: int, dest: Path) -> None:
     )
     if not png.exists() or png.stat().st_size < 500:
         raise SystemExit(f"screenshot failed: {png}")
+    html_path.unlink(missing_ok=True)
 
 
 def main() -> None:
@@ -74,23 +75,22 @@ def main() -> None:
         </div>
       </div>
       <div style="display:flex;gap:12px;margin-top:48px">
-        <div class="chip"><div class="glyph">CPU</div><div><b>CPU 27% · 58°C</b><span>Intel Core i7-11800H</span></div></div>
-        <div class="chip"><div class="glyph">iGPU</div><div><b>iGPU 4% · 49°C</b><span>Intel UHD Graphics</span></div></div>
-        <div class="chip"><div class="glyph">GPU</div><div><b style="color:#f97316">GPU 58% · 81°C</b><span>NVIDIA RTX 3060 Laptop</span></div></div>
+        <div class="chip"><div class="glyph">CPU</div><div><b>27% · 58°C</b><span>CPU</span></div></div>
+        <div class="chip"><div class="glyph">iGPU</div><div><b>4% · 58°C</b><span>iGPU</span></div></div>
+        <div class="chip"><div class="glyph">GPU</div><div><b style="color:#f97316">58% · 81°C</b><span>GPU</span></div></div>
       </div>
-      <div style="margin-top:36px;color:#8b95a7">Dock items, Cool Mode, and fan profiles. Design mockup, not a runtime capture.</div>
+      <div style="margin-top:36px;color:#8b95a7">Dock items and Cool Mode. Design mockup, not a runtime capture.</div>
     </div>"""
 
     dock = """
     <div style="height:100%;background:linear-gradient(#12343a,#071216);padding:36px 28px">
       <div style="height:64px;border-radius:16px;background:rgba(8,18,22,.86);border:1px solid rgba(255,255,255,.08);display:flex;align-items:center;gap:8px;padding:0 12px">
-        <div class="chip"><div class="glyph">CPU</div><b>CPU 27% · 58°C</b></div>
-        <div class="chip"><div class="glyph">iG</div><b>iGPU 4% · 49°C</b></div>
-        <div class="chip"><div class="glyph">GPU</div><b style="color:#f97316">GPU 58% · 81°C</b></div>
-        <div class="chip"><div class="glyph">C</div><b>Cool OFF</b></div>
-        <div class="chip"><div class="glyph">F</div><b>Fan Auto</b></div>
+        <div class="chip"><div class="glyph">CPU</div><div><b>27% · 58°C</b><span>CPU</span></div></div>
+        <div class="chip"><div class="glyph">iG</div><div><b>4% · 58°C</b><span>iGPU</span></div></div>
+        <div class="chip"><div class="glyph">GPU</div><div><b style="color:#f97316">58% · 81°C</b><span>GPU</span></div></div>
+        <div class="chip"><div class="glyph">C</div><div><b>OFF</b><span>Cool</span></div></div>
       </div>
-      <div style="margin-top:28px;color:#d5e7ea;font-size:14px">Command Palette Dock. Each chip is a pinnable item. Click a sensor to open the list. Click Cool or Fan to toggle or cycle.</div>
+      <div style="margin-top:28px;color:#d5e7ea;font-size:14px">Command Palette Dock. The value is on the first line and the short label is underneath. Click a sensor to open the list. Click Cool to toggle.</div>
     </div>"""
 
     sensors = """
@@ -99,13 +99,12 @@ def main() -> None:
         <div class="top"><div class="mark">""" + MARK + """</div><div style="font-weight:700">HW Monitor</div><div class="search">Search sensors</div></div>
         <div class="section">Cooling</div>
         <div class="row"><div class="glyph">C</div><div><div class="title">Cool Mode</div><div class="sub">Click to limit processor turbo on the active power scheme.</div></div><b>Cool OFF</b></div>
-        <div class="row"><div class="glyph">F</div><div><div class="title">Fan Mode</div><div class="sub">Firmware is controlling the fans. Click to cycle enabled modes.</div></div><b>Fan Auto</b></div>
         <div class="section">Processors</div>
-        <div class="row"><div class="glyph">CPU</div><div><div class="title">CPU 27% · 58°C</div><div class="sub">Intel Core i7-11800H · Package</div></div><span class="tag" style="background:#3b82f6;color:white">Cool</span></div>
-        <div class="row"><div class="glyph">CPU</div><div><div class="title">Core 2 31% · 61°C</div><div class="sub">Intel Core i7-11800H · Core 2</div></div><span class="tag" style="background:#eab308;color:#111827">Warm</span></div>
+        <div class="row"><div class="glyph">CPU</div><div><div class="title">CPU 27% · 58°C</div><div class="sub">Processor · Package</div></div><span class="tag" style="background:#3b82f6;color:white">Cool</span></div>
+        <div class="row"><div class="glyph">CPU</div><div><div class="title">Core 2 31% · 61°C</div><div class="sub">Processor · Core 2</div></div><span class="tag" style="background:#eab308;color:#111827">Warm</span></div>
         <div class="section">Graphics</div>
-        <div class="row"><div class="glyph">iG</div><div><div class="title">iGPU 4% · 49°C</div><div class="sub">Intel UHD Graphics · Processor graphics</div></div><span class="tag" style="background:#3b82f6;color:white">Cool</span></div>
-        <div class="row"><div class="glyph">GPU</div><div><div class="title">GPU 58% · 81°C</div><div class="sub">NVIDIA GeForce RTX 3060 Laptop GPU · Adapter</div></div><span class="tag" style="background:#f97316;color:#111827">Hot</span></div>
+        <div class="row"><div class="glyph">iG</div><div><div class="title">iGPU 4% · 58°C</div><div class="sub">Integrated graphics · Package (shared die)</div></div><span class="tag" style="background:#3b82f6;color:white">Cool</span></div>
+        <div class="row"><div class="glyph">GPU</div><div><div class="title">GPU 58% · 81°C</div><div class="sub">Discrete graphics · Adapter</div></div><span class="tag" style="background:#f97316;color:#111827">Hot</span></div>
       </div>
     </div>"""
 
@@ -118,8 +117,8 @@ def main() -> None:
         <div class="field"><label>Blue below / Yellow from / Orange from / Red from</label><p>Defaults 60 / 60 / 75 / 90 °C. Colors #3B82F6, #EAB308, #F97316, #EF4444.</p><div class="box">60 · 60 · 75 · 90</div></div>
         <div class="field"><label>Cool Mode processor cap (%)</label><p>99% disables turbo boost on most processors.</p><div class="box">99</div></div>
         <div class="field toggle"><div><label>Auto Cool Mode</label><p>On at 85°C for 10s. Off at 70°C for 10s.</p></div><div class="switch off"><i></i></div></div>
-        <div class="field"><label>Fan modes</label><p>Silent 20 · Quiet 40 · Balanced 60 · Performance 80 · Max 100. At least two stay enabled.</p><div class="box">Silent, Quiet, Balanced, Performance, Max</div></div>
-        <div class="field toggle"><div><label>Experimental MSI embedded-controller fan probe</label><p>Off by default. Does not write controller registers.</p></div><div class="switch off"><i></i></div></div>
+        <div class="field"><label>CPU short label / full name</label><p>Leave empty to keep the default. Stored against the hardware id.</p><div class="box">CPU · Processor</div></div>
+        <div class="field"><label>CPU on the dock / in the list</label><p>Default, Show, or Hide for each row.</p><div class="box">Default · Default</div></div>
       </div>
     </div>"""
 
@@ -132,17 +131,6 @@ def main() -> None:
           <div class="field" style="margin:0"><label>Before</label><div class="box">Max processor state 100%<br>Boost mode Aggressive</div></div>
           <div class="field" style="margin:0"><label>While Cool Mode is on</label><div class="box">Max processor state 99%<br>Boost mode Disabled</div></div>
         </div>
-      </div>
-    </div>"""
-
-    fans = """
-    <div style="height:100%;display:grid;place-items:center">
-      <div class="palette">
-        <div class="top"><div style="font-weight:700">Fan Mode</div><div class="search">One click cycles the next enabled mode</div></div>
-        <div class="row"><div class="glyph">F</div><div><div class="title">Fan Silent</div><div class="sub">20% duty on every controllable fan LibreHardwareMonitor exposes.</div></div><span class="tag" style="background:#3b82f6;color:white">20%</span></div>
-        <div class="section">Cycle</div>
-        <div style="padding:8px 18px 18px;color:#d5dbe6">Auto → Silent 20% → Quiet 40% → Balanced 60% → Performance 80% → Max 100% → Auto</div>
-        <div class="row"><div class="glyph">!</div><div><div class="title">If no controllable fan is found</div><div class="sub">Fan control is not supported on this device</div></div></div>
       </div>
     </div>"""
 
@@ -171,7 +159,6 @@ def main() -> None:
         ("sensors", sensors, 1040, 760, OUT / "sensors.png"),
         ("settings", settings, 1040, 980, OUT / "settings.png"),
         ("cool-mode", cool, 1040, 520, OUT / "cool-mode.png"),
-        ("fan-mode", fans, 1040, 520, OUT / "fan-mode.png"),
         ("color-levels", colors, 1100, 360, OUT / "color-levels.png"),
         ("logo", icon, 512, 512, OUT / "logo.png"),
     ]

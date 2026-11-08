@@ -22,33 +22,31 @@
   <data name="RoleCoreFormat" xml:space="preserve"><value>Core {0}</value></data>
   <data name="RoleAdapter" xml:space="preserve"><value>Adapter</value></data>
   <data name="RoleCpuGraphics" xml:space="preserve"><value>Processor graphics</value></data>
+  <data name="RoleSharedPackage" xml:space="preserve"><value>Package (shared die)</value></data>
   <data name="TagBlue" xml:space="preserve"><value>Cool</value></data>
   <data name="TagYellow" xml:space="preserve"><value>Warm</value></data>
   <data name="TagOrange" xml:space="preserve"><value>Hot</value></data>
   <data name="TagRed" xml:space="preserve"><value>Critical</value></data>
   <data name="StatusTempsTitle" xml:space="preserve"><value>Temperatures unavailable</value></data>
-  <data name="StatusTempsSubtitle" xml:space="preserve"><value>Install the PawnIO driver and restart Command Palette. Usage is still shown. WinRing0 is not used.</value></data>
+  <data name="StatusTempsSubtitle" xml:space="preserve"><value>The sensor service is running, but package temperature is still missing. Install the PawnIO driver and restart the service. WinRing0 is not used.</value></data>
+  <data name="StatusServiceTitle" xml:space="preserve"><value>Install sensor service for CPU temperature</value></data>
+  <data name="StatusServiceSubtitle" xml:space="preserve"><value>CPU and integrated graphics temperatures need HW Monitor Sensor Service. Usage is still shown.</value></data>
   <data name="ReadingSensors" xml:space="preserve"><value>Reading sensors…</value></data>
   <data name="CoolOn" xml:space="preserve"><value>Cool ON</value></data>
   <data name="CoolOff" xml:space="preserve"><value>Cool OFF</value></data>
+  <data name="CoolDockOn" xml:space="preserve"><value>ON</value></data>
+  <data name="CoolDockOff" xml:space="preserve"><value>OFF</value></data>
+  <data name="CoolDockLabel" xml:space="preserve"><value>Cool</value></data>
   <data name="CoolTitle" xml:space="preserve"><value>Cool Mode</value></data>
   <data name="CoolOnSubtitle" xml:space="preserve"><value>Maximum processor state is limited on the active power scheme.</value></data>
   <data name="CoolOffSubtitle" xml:space="preserve"><value>Click to limit processor turbo on the active power scheme.</value></data>
   <data name="CoolAutoSubtitle" xml:space="preserve"><value>Turned on automatically because the processor stayed hot.</value></data>
   <data name="CoolFailed" xml:space="preserve"><value>Cool Mode could not change the active power scheme. Start Command Palette as administrator and try again.</value></data>
   <data name="CoolReadFailed" xml:space="preserve"><value>Cool Mode could not read the active power scheme.</value></data>
-  <data name="FanTitle" xml:space="preserve"><value>Fan Mode</value></data>
-  <data name="FanAuto" xml:space="preserve"><value>Fan Auto</value></data>
-  <data name="FanNamed" xml:space="preserve"><value>Fan {0}</value></data>
-  <data name="FanUnsupported" xml:space="preserve"><value>Fan control is not supported on this device</value></data>
-  <data name="FanFirmwareSubtitle" xml:space="preserve"><value>Firmware is controlling the fans. Click to cycle enabled modes.</value></data>
-  <data name="FanDutySubtitle" xml:space="preserve"><value>{0}% duty on {1} controllable fan(s).</value></data>
-  <data name="FanApplyFailed" xml:space="preserve"><value>The fan controller did not accept the new duty. Firmware control was requested again.</value></data>
-  <data name="FanTooFew" xml:space="preserve"><value>At least two fan modes must stay enabled.</value></data>
   <data name="SettingRefreshLabel" xml:space="preserve"><value>Refresh interval (ms)</value></data>
   <data name="SettingRefreshDescription" xml:space="preserve"><value>How often sensors refresh. Values outside 500–3000 are clamped.</value></data>
   <data name="SettingCompactLabel" xml:space="preserve"><value>Compact sensor list</value></data>
-  <data name="SettingCompactDescription" xml:space="preserve"><value>Hide per-core rows. Dock items stay one per processor or graphics adapter.</value></data>
+  <data name="SettingCompactDescription" xml:space="preserve"><value>Hide per-core rows unless a row is set to Show. Dock items follow each row's dock choice.</value></data>
   <data name="SettingBlueBelowLabel" xml:space="preserve"><value>Blue below (°C)</value></data>
   <data name="SettingYellowLabel" xml:space="preserve"><value>Yellow from (°C)</value></data>
   <data name="SettingOrangeLabel" xml:space="preserve"><value>Orange from (°C)</value></data>
@@ -73,10 +71,14 @@
   <data name="SettingAutoOnSecondsLabel" xml:space="preserve"><value>Stay hot for (seconds)</value></data>
   <data name="SettingAutoOffLabel" xml:space="preserve"><value>Auto Cool off at (°C)</value></data>
   <data name="SettingAutoOffSecondsLabel" xml:space="preserve"><value>Stay cool for (seconds)</value></data>
-  <data name="SettingFanNameLabel" xml:space="preserve"><value>Fan mode {0} name</value></data>
-  <data name="SettingFanDutyLabel" xml:space="preserve"><value>Fan mode {0} duty (%)</value></data>
-  <data name="SettingFanEnabledLabel" xml:space="preserve"><value>Fan mode {0} enabled</value></data>
-  <data name="SettingFanDutyDescription" xml:space="preserve"><value>0% can stop a fan. Auto and exit hand control back to firmware.</value></data>
-  <data name="SettingExperimentalLabel" xml:space="preserve"><value>Experimental MSI embedded-controller fan probe</value></data>
-  <data name="SettingExperimentalDescription" xml:space="preserve"><value>Off by default. Does not write controller registers. Creator Z16 A11UET is not allow-listed.</value></data>
+  <data name="SettingDeviceShortLabel" xml:space="preserve"><value>{0} short label</value></data>
+  <data name="SettingDeviceShortDescription" xml:space="preserve"><value>Dock label. Leave empty to keep the default. Id: {0}</value></data>
+  <data name="SettingDeviceFullLabel" xml:space="preserve"><value>{0} full name</value></data>
+  <data name="SettingDeviceFullDescription" xml:space="preserve"><value>Optional list name. Leave empty to keep the detected hardware name.</value></data>
+  <data name="SettingDeviceListLabel" xml:space="preserve"><value>{0} in the list</value></data>
+  <data name="SettingDeviceDockLabel" xml:space="preserve"><value>{0} on the dock</value></data>
+  <data name="SettingDeviceVisibilityDescription" xml:space="preserve"><value>Default uses the normal layout. Show forces the row on. Hide removes it.</value></data>
+  <data name="VisibilityDefault" xml:space="preserve"><value>Default</value></data>
+  <data name="VisibilityShow" xml:space="preserve"><value>Show</value></data>
+  <data name="VisibilityHide" xml:space="preserve"><value>Hide</value></data>
 </root>

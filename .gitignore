@@ -2,12 +2,14 @@ bin/
 obj/
 .vs/
 .idea/
+.mono/
 *.user
 *.suo
 TestResults/
 artifacts/
 setup-x64.iss
 setup-arm64.iss
+scripts/stage/
 agent-tools/
 *.nupkg
 .DS_Store
