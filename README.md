@@ -144,7 +144,7 @@ If PawnIO is missing, or the process cannot use it, temperatures show as `n/a` a
 
 ## Build
 
-Requirements: .NET 9 SDK, Windows 10/11 SDK (the project compiles against 10.0.22621 because `Shmuelie.WinRTServer` targets Windows 10.0.22000), and [Inno Setup 6](https://jrsoftware.org/isinfo.php) for the installer.
+Requirements: .NET 10 SDK, Windows 10/11 SDK (the project compiles against 10.0.22621 because `Shmuelie.WinRTServer` targets Windows 10.0.22000), and [Inno Setup 6](https://jrsoftware.org/isinfo.php) for the installer.
 
 ```powershell
 dotnet test src\HWMonitor.Tests\HWMonitor.Tests.csproj
@@ -153,13 +153,13 @@ cd hwmonitor
 .\build-exe.ps1 -Version 0.1.0.0
 ```
 
-The test project is plain .NET 9 and does not need Windows. The extension project runs `cswinrt.exe`, so build it on Windows.
+The test project is plain .NET 10 and does not need Windows. The extension project runs `cswinrt.exe`, so build it on Windows.
 
 `build-exe.ps1` publishes self-contained `win-x64` and `win-arm64` builds and compiles `HWMonitor-Setup-<version>-x64.exe` and the ARM64 installer. Trimming is off because LibreHardwareMonitor is not trim-safe.
 
-The extension project targets `net9.0-windows10.0.22621.0` with a minimum supported OS of 10.0.19041. The WinRT server library itself is built for Windows 10.0.22000, so use Windows 11 for a real run.
+The extension project targets `net10.0-windows10.0.26100.0` with a minimum supported OS of 10.0.19041. The WinRT server library itself is built for Windows 10.0.22000, so use Windows 11 for a real run.
 
-GitHub Actions workflow `release-extension.yml` runs the same build on `windows-2022` with .NET 9 and Inno Setup. `update-winget.yml` submits later updates after a release named `HWMonitor Extension v…`.
+GitHub Actions workflow `release-extension.yml` runs the same build on `windows-2022` with .NET 10 and Inno Setup. `update-winget.yml` submits later updates after a release named `HWMonitor Extension v…`.
 
 SDK: `Microsoft.CommandPalette.Extensions` **0.12.260812002**. A 0.13 package was not on NuGet at the time this project was created. Dock bands shipped in 0.9 and are part of 0.12, which Command Palette 0.13 hosts load.
 

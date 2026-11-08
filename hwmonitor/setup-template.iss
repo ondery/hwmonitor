@@ -4,7 +4,7 @@
 #define AppVersion "0.1.0.0"
 
 [Setup]
-AppId={{C9C07999-73E6-498F-AD96-049A06D708DE}}
+AppId={{C9C07999-73E6-498F-AD96-049A06D708DE}
 AppName=HW Monitor
 AppVersion={#AppVersion}
 AppPublisher=Ondery
@@ -17,6 +17,7 @@ OutputBaseFilename=HWMonitor-Setup-{#AppVersion}
 Compression=lzma
 SolidCompression=yes
 MinVersion=10.0.19041
+PrivilegesRequired=lowest
 UninstallDisplayIcon={app}\HWMonitor.exe
 UninstallDisplayName=HW Monitor
 
@@ -30,5 +31,5 @@ Source: "bin\Release\win-x64\publish\*"; DestDir: "{app}"; Flags: ignoreversion 
 Name: "{group}\HW Monitor"; Filename: "{app}\HWMonitor.exe"
 
 [Registry]
-Root: HKCU; Subkey: "SOFTWARE\Classes\CLSID\{{37dd9813-4cb9-458b-bc43-41e89443f396}}"; ValueType: string; ValueName: ""; ValueData: "HWMonitor"; Flags: uninsdeletekey
-Root: HKCU; Subkey: "SOFTWARE\Classes\CLSID\{{37dd9813-4cb9-458b-bc43-41e89443f396}}\LocalServer32"; ValueType: string; ValueName: ""; ValueData: "{app}\HWMonitor.exe -RegisterProcessAsComServer"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "SOFTWARE\Classes\CLSID\{{37dd9813-4cb9-458b-bc43-41e89443f396}"; ValueType: string; ValueName: ""; ValueData: "HWMonitor"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "SOFTWARE\Classes\CLSID\{{37dd9813-4cb9-458b-bc43-41e89443f396}\LocalServer32"; ValueType: string; ValueName: ""; ValueData: "{app}\HWMonitor.exe -RegisterProcessAsComServer"; Flags: uninsdeletekey

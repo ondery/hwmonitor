@@ -72,6 +72,13 @@ foreach ($Platform in $Platforms) {
         $InnoSetupPath = "${env:ProgramFiles}\Inno Setup 6\iscc.exe"
     }
     if (-not (Test-Path $InnoSetupPath)) {
+        $InnoSetupPath = "${env:LOCALAPPDATA}\Programs\Inno Setup 6\iscc.exe"
+    }
+    if (-not (Test-Path $InnoSetupPath)) {
+        $cmd = Get-Command iscc.exe -ErrorAction SilentlyContinue
+        if ($cmd) { $InnoSetupPath = $cmd.Source }
+    }
+    if (-not (Test-Path $InnoSetupPath)) {
         throw "Inno Setup was not found."
     }
 

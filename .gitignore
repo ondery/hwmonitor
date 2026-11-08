@@ -11,3 +11,7 @@ setup-arm64.iss
 agent-tools/
 *.nupkg
 .DS_Store
+
+AppPackages/
+*.msix
+*.msixbundle
