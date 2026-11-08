@@ -19,6 +19,7 @@ public sealed record CoolOptions(int MaximumProcessorState, bool LimitBoost, int
 public sealed record MonitorOptions(
     int RefreshIntervalMs,
     bool Compact,
+    bool ColorDockIcons,
     ColorScale Colors,
     CoolOptions Cool,
     AutoCoolOptions AutoCool,
@@ -29,6 +30,7 @@ public sealed record MonitorOptions(
     public static MonitorOptions CreateDefault() => new(
         DefaultRefreshMs,
         false,
+        true,
         ColorScale.Default,
         CoolOptions.Default,
         AutoCoolOptions.Default,

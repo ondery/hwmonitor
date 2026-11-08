@@ -4,13 +4,25 @@
 from __future__ import annotations
 
 import subprocess
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / "docs" / "images"
 ASSETS = ROOT / "hwmonitor" / "Assets"
 MOCK = Path(__file__).resolve().parent
-CHROME = "/opt/google/chrome/chrome"
+CHROME = next(
+    (
+        candidate
+        for candidate in (
+            "/opt/google/chrome/chrome",
+            "/usr/local/bin/google-chrome",
+            "/usr/bin/google-chrome",
+        )
+        if Path(candidate).exists()
+    ),
+    "google-chrome",
+)
 
 MARK = """
 <svg viewBox="0 0 64 64" fill="none">
@@ -64,7 +76,7 @@ def shot(name: str, html: str, width: int, height: int, dest: Path) -> None:
     html_path.unlink(missing_ok=True)
 
 
-def main() -> None:
+def main(only: set[str] | None = None) -> None:
     banner = f"""
     <div style="height:100%;padding:64px 72px;background:radial-gradient(900px 420px at 85% 10%, #1d4ed855, transparent 60%), linear-gradient(160deg,#10151f,#0b0e14)">
       <div style="display:flex;align-items:center;gap:18px">
@@ -85,9 +97,9 @@ def main() -> None:
     dock = """
     <div style="height:100%;background:linear-gradient(#12343a,#071216);padding:36px 28px">
       <div style="height:64px;border-radius:16px;background:rgba(8,18,22,.86);border:1px solid rgba(255,255,255,.08);display:flex;align-items:center;gap:8px;padding:0 12px">
-        <div class="chip"><div class="glyph">CPU</div><div><b>27% · 58°C</b><span>CPU</span></div></div>
-        <div class="chip"><div class="glyph">iG</div><div><b>4% · 58°C</b><span>iGPU</span></div></div>
-        <div class="chip"><div class="glyph">GPU</div><div><b style="color:#f97316">58% · 81°C</b><span>GPU</span></div></div>
+        <div class="chip"><div class="glyph" style="background:#3b82f6;color:white">CPU</div><div><b>27% · 58°C</b><span>CPU</span></div></div>
+        <div class="chip"><div class="glyph" style="background:#3b82f6;color:white">iG</div><div><b>4% · 58°C</b><span>iGPU</span></div></div>
+        <div class="chip"><div class="glyph" style="background:#f97316;color:#111827">GPU</div><div><b>58% · 81°C</b><span>GPU</span></div></div>
         <div class="chip"><div class="glyph">C</div><div><b>OFF</b><span>Cool</span></div></div>
       </div>
       <div style="margin-top:28px;color:#d5e7ea;font-size:14px">Command Palette Dock. The value is on the first line and the short label is underneath. Click a sensor to open the list. Click Cool to toggle.</div>
@@ -110,15 +122,22 @@ def main() -> None:
 
     settings = """
     <div style="height:100%;display:grid;place-items:center">
-      <div class="palette" style="height:860px">
+      <div class="palette" style="height:1360px">
         <div class="top"><div style="font-weight:700">HW Monitor settings</div></div>
-        <div class="field"><label>Refresh interval (ms)</label><p>How often sensors refresh. Values outside 500–3000 are clamped.</p><div class="box">1000</div></div>
-        <div class="field toggle"><div><label>Compact sensor list</label><p>Hide per-core rows. Dock items stay one per device.</p></div><div class="switch off"><i></i></div></div>
-        <div class="field"><label>Blue below / Yellow from / Orange from / Red from</label><p>Defaults 60 / 60 / 75 / 90 °C. Colors #3B82F6, #EAB308, #F97316, #EF4444.</p><div class="box">60 · 60 · 75 · 90</div></div>
-        <div class="field"><label>Cool Mode processor cap (%)</label><p>99% disables turbo boost on most processors.</p><div class="box">99</div></div>
-        <div class="field toggle"><div><label>Auto Cool Mode</label><p>On at 85°C for 10s. Off at 70°C for 10s.</p></div><div class="switch off"><i></i></div></div>
-        <div class="field"><label>CPU short label / full name</label><p>Leave empty to keep the default. Stored against the hardware id.</p><div class="box">CPU · Processor</div></div>
-        <div class="field"><label>CPU on the dock / in the list</label><p>Default, Show, or Hide for each row.</p><div class="box">Default · Default</div></div>
+        <div class="section">General</div>
+        <div class="field"><label>Refresh interval (ms)</label><p>Applies to the list page and Dock.</p><div class="box">1000</div></div>
+        <div class="field toggle"><div><label>Compact sensor list</label><p>Applies to the list page.</p></div><div class="switch off"><i></i></div></div>
+        <div class="field toggle"><div><label>Color dock icons</label><p>Applies to the Dock only.</p></div><div class="switch"><i></i></div></div>
+        <div class="section">Temperature colors</div>
+        <div class="field"><label>Cool below / Warm from / Hot from / Critical from</label><p>Applies to the list page and Dock. Defaults 60 / 60 / 75 / 90 °C.</p><div class="box">60 · 60 · 75 · 90</div></div>
+        <div class="field"><label>Cool band color</label><p>Applies to the list page and Dock. Named color, or Custom.</p><div class="box">Blue</div></div>
+        <div class="field"><label>Cool custom hex</label><p>Applies to the list page and Dock only when Custom is selected.</p><div class="box">#3B82F6</div></div>
+        <div class="section">Cool Mode</div>
+        <div class="field"><label>Cool Mode processor cap (%)</label><p>Used by Cool Mode. 99 disables turbo on most processors.</p><div class="box">99</div></div>
+        <div class="field toggle"><div><label>Auto Cool Mode</label><p>Used by Cool Mode auto-trigger. On at 85°C for 10s. Off at 70°C for 10s.</p></div><div class="switch off"><i></i></div></div>
+        <div class="section">Devices</div>
+        <div class="field"><label>CPU short label / full name</label><p>Applies to the list page and Dock. Stored against the hardware id.</p><div class="box">CPU · Processor</div></div>
+        <div class="field"><label>CPU in the list / on the dock</label><p>List choice applies to the list page. Dock choice applies to the Dock only.</p><div class="box">Default · Default</div></div>
       </div>
     </div>"""
 
@@ -137,7 +156,7 @@ def main() -> None:
     colors = """
     <div style="height:100%;padding:48px 56px">
       <div style="font-size:28px;font-weight:700">Temperature colors</div>
-      <div style="color:#b7c0d0;margin:8px 0 28px">Thresholds and swatches are settings. Tags on list and dock items use them.</div>
+      <div style="color:#b7c0d0;margin:8px 0 28px">Thresholds and swatches are settings. List tags and dock icons use them.</div>
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px">
         <div class="field" style="margin:0;border-top:6px solid #3b82f6"><label>Blue</label><p>Below 60°C</p><div class="box">#3B82F6 · Cool</div></div>
         <div class="field" style="margin:0;border-top:6px solid #eab308"><label>Yellow</label><p>From 60°C</p><div class="box">#EAB308 · Warm</div></div>
@@ -157,14 +176,19 @@ def main() -> None:
         ("banner", banner, 1280, 420, OUT / "banner.png"),
         ("dock", dock, 1280, 220, OUT / "dock.png"),
         ("sensors", sensors, 1040, 760, OUT / "sensors.png"),
-        ("settings", settings, 1040, 980, OUT / "settings.png"),
+        ("settings", settings, 1040, 1460, OUT / "settings.png"),
         ("cool-mode", cool, 1040, 520, OUT / "cool-mode.png"),
         ("color-levels", colors, 1100, 360, OUT / "color-levels.png"),
         ("logo", icon, 512, 512, OUT / "logo.png"),
     ]
     for name, html, w, h, dest in shots:
+        if only and name not in only:
+            continue
         shot(name, html, w, h, dest)
         print("wrote", dest)
+
+    if only:
+        return
 
     icon_sizes = {
         "StoreLogo.png": (50, 50),
@@ -185,4 +209,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    chosen = {name for name in sys.argv[1:] if name}
+    main(chosen or None)

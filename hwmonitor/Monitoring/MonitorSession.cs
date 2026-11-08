@@ -167,26 +167,9 @@ internal sealed class MonitorSession : IDisposable
 
     private List<RowSpec> BuildSpecs(IReadOnlyList<SensorReading> readings, MonitorOptions options, bool serviceUp, string? serviceError)
     {
-        var specs = new List<RowSpec> { CoolSpec() };
-        var installHint = !serviceUp && readings.Any(TemperatureGaps.IsSharedDieGap);
-        var driverHint = serviceUp && readings.Any(TemperatureGaps.IsSharedDieGap);
-        if (installHint)
-        {
-            specs.Add(Status(CommandIds.Status, UiText.StatusServiceTitle, UiText.StatusServiceSubtitle));
-        }
-        else if (driverHint || (readings.Count > 0 && readings.Where(reading => reading.IsPrimary).All(reading => reading.TemperatureCelsius is null)))
-        {
-            var subtitle = string.IsNullOrWhiteSpace(serviceError)
-                ? UiText.StatusTempsSubtitle
-                : serviceError;
-            specs.Add(Status(CommandIds.Status, UiText.StatusTempsTitle, subtitle));
-        }
-
-        if (readings.Count == 0)
-        {
-            specs.Add(Status(CommandIds.Empty, UiText.EmptyTitle, UiText.EmptySubtitle));
-        }
-
+        var specs = new List<RowSpec> { CoolSpec(options) };
+        var processors = new List<RowSpec>();
+        var graphics = new List<RowSpec>();
         foreach (var reading in readings)
         {
             var defaultList = reading.IsPrimary || !options.Compact;
@@ -213,21 +196,49 @@ internal sealed class MonitorSession : IDisposable
             var listTitle = ReadingText.ListLine(reading.ShortLabel, reading.UsagePercent, reading.TemperatureCelsius, UiText.Unavailable, hideMissing, culture);
             var listSubtitle = hideMissing ? UiText.StatusServiceTitle : $"{reading.HardwareName} · {role}";
             var dockTitle = ReadingText.Value(reading.UsagePercent, reading.TemperatureCelsius, UiText.Unavailable, hideMissing, culture);
-            specs.Add(new RowSpec(
+            var glyph = reading.Kind == DeviceKind.Cpu ? Glyphs.Cpu : Glyphs.Gpu;
+            var row = new RowSpec(
                 SensorIds.ToCommandId(reading.Id),
                 dockTitle,
                 reading.ShortLabel,
                 listTitle,
                 listSubtitle,
                 reading.Kind == DeviceKind.Cpu ? UiText.SectionProcessors : UiText.SectionGraphics,
-                reading.Kind == DeviceKind.Cpu ? Glyphs.Cpu : Glyphs.Gpu,
+                glyph,
+                SensorIcons.Temperature(reading.Kind, color, options.ColorDockIcons) ?? glyph,
                 options.Devices.AppearsInList(reading.Id, defaultList),
                 options.Devices.AppearsInDock(reading.Id, defaultDock),
-                band,
-                color,
-                true,
-                ReadingText.SensorTitleSample,
-                reading.ShortLabel));
+                color is RgbColor swatch ? StatusBadges.ForTemperature(band, swatch) : null);
+            if (reading.Kind == DeviceKind.Cpu)
+            {
+                processors.Add(row);
+            }
+            else
+            {
+                graphics.Add(row);
+            }
+        }
+
+        specs.AddRange(processors);
+        specs.AddRange(graphics);
+
+        var installHint = !serviceUp && readings.Any(TemperatureGaps.IsSharedDieGap);
+        var driverHint = serviceUp && readings.Any(TemperatureGaps.IsSharedDieGap);
+        if (installHint)
+        {
+            specs.Add(Status(CommandIds.Status, UiText.StatusServiceTitle, UiText.StatusServiceSubtitle));
+        }
+        else if (driverHint || (readings.Count > 0 && readings.Where(reading => reading.IsPrimary).All(reading => reading.TemperatureCelsius is null)))
+        {
+            var subtitle = string.IsNullOrWhiteSpace(serviceError)
+                ? UiText.StatusTempsSubtitle
+                : serviceError;
+            specs.Add(Status(CommandIds.Status, UiText.StatusTempsTitle, subtitle));
+        }
+
+        if (readings.Count == 0)
+        {
+            specs.Add(Status(CommandIds.Empty, UiText.EmptyTitle, UiText.EmptySubtitle));
         }
 
         return specs;
@@ -242,34 +253,29 @@ internal sealed class MonitorSession : IDisposable
             subtitle,
             UiText.SectionStatus,
             Glyphs.Status,
+            Glyphs.Status,
             true,
             false,
-            TemperatureBand.Unknown,
-            null,
-            true,
-            title,
-            " ");
+            null);
 
-    private RowSpec CoolSpec()
+    private RowSpec CoolSpec(MonitorOptions options)
     {
         var on = _cool.IsOn;
         var subtitle = _cool.LastError
             ?? (on ? (_cool.ActivatedByAuto ? UiText.CoolAutoSubtitle : UiText.CoolOnSubtitle) : UiText.CoolOffSubtitle);
+        var icon = SensorIcons.Cool(on, options.Colors.Blue);
         return new RowSpec(
             CommandIds.Cool,
             on ? UiText.CoolDockOn : UiText.CoolDockOff,
             UiText.CoolDockLabel,
-            on ? UiText.CoolOn : UiText.CoolOff,
+            UiText.CoolTitle,
             subtitle,
             UiText.SectionCooling,
-            Glyphs.Cool,
+            icon,
+            icon,
             true,
             true,
-            TemperatureBand.Unknown,
-            null,
-            false,
-            UiText.CoolDockOff,
-            UiText.CoolDockLabel);
+            StatusBadges.ForCool(on, options.Colors.Blue));
     }
 }
 
@@ -280,14 +286,11 @@ internal sealed record RowSpec(
     string ListTitle,
     string ListSubtitle,
     string Section,
-    string Glyph,
+    string ListIcon,
+    string DockIcon,
     bool InList,
     bool InDock,
-    TemperatureBand Band,
-    RgbColor? Color,
-    bool OpensPage,
-    string TitleSample,
-    string SubtitleSample);
+    StatusBadge? Badge);
 
 internal sealed class SensorBoard
 {
@@ -341,13 +344,17 @@ internal sealed class SensorBoard
 
 internal sealed class BoundRow
 {
-    private string _titleSample = string.Empty;
-    private string _subtitleSample = string.Empty;
+    private string _listIcon;
+    private string _dockIcon;
+    private string _listBadge = string.Empty;
+    private string _dockBadge = string.Empty;
 
-    private BoundRow(ListItem list, ListItem dock)
+    private BoundRow(ListItem list, ListItem dock, string listIcon, string dockIcon)
     {
         List = list;
         Dock = dock;
+        _listIcon = listIcon;
+        _dockIcon = dockIcon;
     }
 
     public ListItem List { get; }
@@ -359,25 +366,26 @@ internal sealed class BoundRow
         var command = spec.CommandId == CommandIds.Cool
             ? new CallbackCommand(spec.CommandId, UiText.CoolTitle, toggleCool)
             : (ICommand)new OpenPageCommand(spec.CommandId, pageId, spec.DockSubtitle.Length == 0 ? spec.ListTitle : spec.DockSubtitle);
-        var list = new ListItem(command) { Icon = new IconInfo(spec.Glyph) };
-        var dock = new ListItem(command) { Icon = new IconInfo(spec.Glyph) };
-        return new BoundRow(list, dock);
+        var list = new ListItem(command) { Icon = new IconInfo(spec.ListIcon) };
+        var dock = new ListItem(command) { Icon = new IconInfo(spec.DockIcon) };
+        return new BoundRow(list, dock, spec.ListIcon, spec.DockIcon);
     }
 
     public void Update(RowSpec spec)
     {
-        Set(List, spec.ListTitle, spec.ListSubtitle, spec.Section, spec);
-        Set(Dock, spec.DockTitle, spec.DockSubtitle, string.Empty, spec);
-        if (!string.Equals(_titleSample, spec.TitleSample, StringComparison.Ordinal)
-            || !string.Equals(_subtitleSample, spec.SubtitleSample, StringComparison.Ordinal))
-        {
-            ApplyDockLayout(Dock, spec.TitleSample, spec.SubtitleSample);
-            _titleSample = spec.TitleSample;
-            _subtitleSample = spec.SubtitleSample;
-        }
+        Set(List, spec.ListTitle, spec.ListSubtitle, spec.Section, spec.ListIcon, spec.Badge, ref _listIcon, ref _listBadge);
+        Set(Dock, spec.DockTitle, spec.DockSubtitle, string.Empty, spec.DockIcon, null, ref _dockIcon, ref _dockBadge);
     }
 
-    private static void Set(ListItem item, string title, string subtitle, string section, RowSpec spec)
+    private static void Set(
+        ListItem item,
+        string title,
+        string subtitle,
+        string section,
+        string icon,
+        StatusBadge? badge,
+        ref string iconCache,
+        ref string badgeCache)
     {
         if (!string.Equals(item.Title, title, StringComparison.Ordinal))
         {
@@ -394,41 +402,37 @@ internal sealed class BoundRow
             item.Section = section;
         }
 
-        if (spec.Color is not RgbColor color || spec.Band == TemperatureBand.Unknown)
+        if (!string.Equals(iconCache, icon, StringComparison.Ordinal))
         {
-            if (item.Tags.Length != 0)
-            {
-                item.Tags = [];
-            }
-
-            return;
+            item.Icon = new IconInfo(icon);
+            iconCache = icon;
         }
 
-        var text = spec.Band switch
+        var badgeKey = badge is StatusBadge shown
+            ? shown.Text + "|" + shown.Background.ToHex() + "|" + shown.Foreground.ToHex()
+            : string.Empty;
+        if (!string.Equals(badgeCache, badgeKey, StringComparison.Ordinal))
         {
-            TemperatureBand.Yellow => UiText.TagYellow,
-            TemperatureBand.Orange => UiText.TagOrange,
-            TemperatureBand.Red => UiText.TagRed,
-            _ => UiText.TagBlue,
-        };
-        var contrast = color.ContrastText();
-        item.Tags =
-        [
-            new Tag(text)
-            {
-                Background = ColorHelpers.FromRgb(color.R, color.G, color.B),
-                Foreground = ColorHelpers.FromRgb(contrast.R, contrast.G, contrast.B),
-            },
-        ];
-    }
+            item.Tags = badge is StatusBadge tag
+                ?
+                [
+                    new Tag(tag.Text)
+                    {
+                        Background = ColorHelpers.FromRgb(tag.Background.R, tag.Background.G, tag.Background.B),
+                        Foreground = ColorHelpers.FromRgb(tag.Foreground.R, tag.Foreground.G, tag.Foreground.B),
+                    },
+                ]
+                : [];
+            badgeCache = badgeKey;
+        }
 
-    private static void ApplyDockLayout(ListItem item, string titleSample, string subtitleSample)
-    {
-        // Width and tabular-digit hints are not set: some Command Palette
-        // releases crash while measuring them. Labels size to their content.
-        _ = item;
-        _ = titleSample;
-        _ = subtitleSample;
+        var suggest = badge is StatusBadge extra
+            ? string.Join(' ', title, subtitle, extra.Text)
+            : string.Join(' ', title, subtitle);
+        if (!string.Equals(item.TextToSuggest, suggest, StringComparison.Ordinal))
+        {
+            item.TextToSuggest = suggest;
+        }
     }
 }
 

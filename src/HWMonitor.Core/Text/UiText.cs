@@ -164,5 +164,55 @@ public static class UiText
 
     public static string DeviceDockLabel(string name) => string.Format(CultureInfo.CurrentCulture, Get("SettingDeviceDockLabel"), name);
 
+    public static string SettingsPageName => Get(nameof(SettingsPageName));
+
+    public static string SettingsPageTitle => Get(nameof(SettingsPageTitle));
+
+    public static string SettingSave => Get(nameof(SettingSave));
+
+    public static string SettingGroupGeneral => Get(nameof(SettingGroupGeneral));
+
+    public static string SettingGroupGeneralHelp => Get(nameof(SettingGroupGeneralHelp));
+
+    public static string SettingGroupColors => Get(nameof(SettingGroupColors));
+
+    public static string SettingGroupColorsHelp => Get(nameof(SettingGroupColorsHelp));
+
+    public static string SettingGroupCool => Get(nameof(SettingGroupCool));
+
+    public static string SettingGroupCoolHelp => Get(nameof(SettingGroupCoolHelp));
+
+    public static string SettingGroupDevices => Get(nameof(SettingGroupDevices));
+
+    public static string SettingGroupDevicesHelp => Get(nameof(SettingGroupDevicesHelp));
+
+    public static string SettingGroupDevicesEmpty => Get(nameof(SettingGroupDevicesEmpty));
+
+    public static string SettingDockColorLabel => Get(nameof(SettingDockColorLabel));
+
+    public static string SettingDockColorDescription => Get(nameof(SettingDockColorDescription));
+
+    public static string SettingCustomHexDescription => Get(nameof(SettingCustomHexDescription));
+
+    public static string SettingCustomHexPlaceholder => Get(nameof(SettingCustomHexPlaceholder));
+
+    public static string SettingAutoOnDescription => Get(nameof(SettingAutoOnDescription));
+
+    public static string SettingAutoOnSecondsDescription => Get(nameof(SettingAutoOnSecondsDescription));
+
+    public static string SettingAutoOffDescription => Get(nameof(SettingAutoOffDescription));
+
+    public static string SettingAutoOffSecondsDescription => Get(nameof(SettingAutoOffSecondsDescription));
+
+    public static string SettingDeviceListDescription => Get(nameof(SettingDeviceListDescription));
+
+    public static string SettingDeviceDockDescription => Get(nameof(SettingDeviceDockDescription));
+
+    public static string ColorPreset(string id) => Get("ColorPreset_" + id);
+
+    public static string CustomHexLabel(string band) => string.Format(CultureInfo.CurrentCulture, Get("SettingCustomHexLabel"), band);
+
+    public static string DeviceHardwareId(string id) => string.Format(CultureInfo.CurrentCulture, Get("SettingDeviceHardwareId"), id);
+
     private static string Get(string name) => Resources.GetString(name, CultureInfo.CurrentUICulture) ?? name;
 }

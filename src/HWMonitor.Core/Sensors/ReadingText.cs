@@ -88,6 +88,8 @@ public static class SensorIds
 
 public static class DockProperties
 {
+    // Some Command Palette builds crash while measuring these keys.
+    // The names stay so tests can prove the extension does not send them.
     public const string TabularDigits = "Microsoft.CommandPalette.Dock.TabularDigits";
     public const string TitleWidth = "Microsoft.CommandPalette.Dock.TitleWidth";
     public const string SubtitleWidth = "Microsoft.CommandPalette.Dock.SubtitleWidth";
