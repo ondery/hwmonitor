@@ -1,75 +1,117 @@
-# Updates the WinGet manifest after an HW Monitor release is published.
+# Updates the WinGet manifest for an existing HW Monitor release.
 # The package identifier is the WinGet id Ondery.HWMonitor.
+#
+# This workflow only runs when it is started by hand from the Actions tab.
+# It never runs on push or on release, so nothing is submitted to WinGet
+# without an explicit request.
+#
+# wingetcreate needs a classic personal access token with the public_repo
+# scope to open the pull request in microsoft/winget-pkgs. Store it as the
+# repository secret WINGET_TOKEN. The default GITHUB_TOKEN cannot do this.
 
 name: Update WinGet - HWMonitor Extension
 
 on:
-  release:
-    types: [published]
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version number (e.g., 0.1.0.0)'
-        required: false
+        description: 'Version number (e.g., 0.2.0.0)'
+        required: true
         type: string
       release_tag:
-        description: 'Release tag (e.g., HWMonitor-v0.1.0.0)'
+        description: 'Release tag (leave empty for HWMonitor-v<version>)'
         required: false
         type: string
+      submit:
+        description: 'Submit the pull request to microsoft/winget-pkgs'
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
 
 env:
-  EXTENSION_NAME: ${{ vars.EXTENSION_NAME || 'HWMonitor' }}
-  GITHUB_USER_NAME: ${{ vars.GITHUB_USER_NAME || 'ondery' }}
-  GITHUB_REPO: ${{ vars.GITHUB_REPO || 'hwmonitor' }}
-  YOUR_PACKAGE_IDENTITY_NAME_HERE: ${{ vars.YOUR_PACKAGE_IDENTITY_NAME_HERE || 'Ondery.HWMonitor' }}
+  EXTENSION_NAME: HWMonitor
+  GITHUB_USER_NAME: ondery
+  GITHUB_REPO: hwmonitor
+  WINGET_PACKAGE_ID: Ondery.HWMonitor
 
 jobs:
   update-winget:
-    if: github.event_name == 'workflow_dispatch' || startsWith(github.event.release.name, '${{ env.EXTENSION_NAME }} Extension')
     runs-on: windows-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Get release info
+      - name: Resolve release
         id: release
-        run: |
-          if ("${{ github.event_name }}" -eq "workflow_dispatch" -and "${{ inputs.version }}" -ne "") {
-            echo "VERSION=${{ inputs.version }}" >> $env:GITHUB_OUTPUT
-            echo "TAG=${{ inputs.release_tag }}" >> $env:GITHUB_OUTPUT
-          } elseif ("${{ github.event_name }}" -eq "release") {
-            $version = "${{ github.event.release.tag_name }}" -replace "${{ env.EXTENSION_NAME }}-v", ""
-            echo "VERSION=$version" >> $env:GITHUB_OUTPUT
-            echo "TAG=${{ github.event.release.tag_name }}" >> $env:GITHUB_OUTPUT
-          } else {
-            $latestRelease = gh release list --limit 1 --json tagName,name | ConvertFrom-Json | Where-Object { $_.name -like "${{ env.EXTENSION_NAME }} Extension*" }
-            $version = $latestRelease.tagName -replace "${{ env.EXTENSION_NAME }}-v", ""
-            echo "VERSION=$version" >> $env:GITHUB_OUTPUT
-            echo "TAG=$($latestRelease.tagName)" >> $env:GITHUB_OUTPUT
-          }
+        shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          INPUT_VERSION: ${{ inputs.version }}
+          INPUT_TAG: ${{ inputs.release_tag }}
+        run: |
+          $version = $env:INPUT_VERSION.Trim()
+          if ($version -notmatch '^\d+\.\d+\.\d+\.\d+$') {
+            throw "Version must have four parts, for example 0.2.0.0. Got '$version'."
+          }
+          $tag = $env:INPUT_TAG.Trim()
+          if (-not $tag) { $tag = "$env:EXTENSION_NAME-v$version" }
+
+          $repo = "$env:GITHUB_USER_NAME/$env:GITHUB_REPO"
+          $assets = gh release view $tag --repo $repo --json assets --jq '.assets[].name'
+          if ($LASTEXITCODE -ne 0) { throw "Release $tag was not found in $repo." }
+
+          foreach ($arch in @('x64', 'arm64')) {
+            $name = "$env:EXTENSION_NAME-Setup-$version-$arch.exe"
+            if ($assets -notcontains $name) { throw "Release $tag has no asset $name." }
+          }
+
+          "VERSION=$version" >> $env:GITHUB_OUTPUT
+          "TAG=$tag" >> $env:GITHUB_OUTPUT
+          Write-Host "Version: $version"
+          Write-Host "Tag: $tag"
 
       - name: Install wingetcreate
+        shell: pwsh
         run: |
-          iwr https://aka.ms/wingetcreate/latest -OutFile wingetcreate.exe
+          Invoke-WebRequest https://aka.ms/wingetcreate/latest -OutFile wingetcreate.exe
 
       - name: Update WinGet manifest
+        shell: pwsh
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
+          VERSION: ${{ steps.release.outputs.VERSION }}
+          TAG: ${{ steps.release.outputs.TAG }}
+          SUBMIT: ${{ inputs.submit }}
         run: |
-          $version = "${{ steps.release.outputs.VERSION }}"
-          $tag = "${{ steps.release.outputs.TAG }}"
+          $base = "https://github.com/$env:GITHUB_USER_NAME/$env:GITHUB_REPO/releases/download/$env:TAG"
+          $x64Url = "$base/$env:EXTENSION_NAME-Setup-$env:VERSION-x64.exe"
+          $arm64Url = "$base/$env:EXTENSION_NAME-Setup-$env:VERSION-arm64.exe"
 
-          $x64Url = "https://github.com/${{ env.GITHUB_USER_NAME }}/${{ env.GITHUB_REPO }}/releases/download/$tag/${{ env.EXTENSION_NAME }}-Setup-$version-x64.exe"
-          $arm64Url = "https://github.com/${{ env.GITHUB_USER_NAME }}/${{ env.GITHUB_REPO }}/releases/download/$tag/${{ env.EXTENSION_NAME }}-Setup-$version-arm64.exe"
-
-          Write-Host "Updating WinGet manifest for version $version"
+          Write-Host "Updating WinGet manifest for version $env:VERSION"
           Write-Host "x64 URL: $x64Url"
           Write-Host "ARM64 URL: $arm64Url"
 
-          .\wingetcreate.exe update ${{ env.YOUR_PACKAGE_IDENTITY_NAME_HERE }} `
-            --version $version `
-            --urls "$x64Url|x64" "$arm64Url|arm64" `
-            --token $env:GITHUB_TOKEN `
-            --submit
+          $arguments = @(
+            'update', $env:WINGET_PACKAGE_ID,
+            '--version', $env:VERSION,
+            '--urls', "$x64Url|x64", "$arm64Url|arm64",
+            '--out', 'manifests'
+          )
+
+          if ($env:SUBMIT -eq 'true') {
+            if (-not $env:WINGET_TOKEN) {
+              throw 'Set the WINGET_TOKEN repository secret before submitting.'
+            }
+            $arguments += @('--token', $env:WINGET_TOKEN, '--submit')
+          }
+
+          .\wingetcreate.exe @arguments
+          if ($LASTEXITCODE -ne 0) { throw "wingetcreate failed with exit code $LASTEXITCODE" }
+
+      - name: Upload manifests
+        if: ${{ !inputs.submit }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: winget-manifests
+          path: manifests/**
+          if-no-files-found: warn

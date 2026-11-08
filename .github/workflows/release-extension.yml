@@ -21,7 +21,7 @@ env:
   DISPLAY_NAME: ${{ vars.DISPLAY_NAME || 'HW Monitor' }}
   EXTENSION_NAME: ${{ vars.EXTENSION_NAME || 'HWMonitor' }}
   FOLDER_NAME: ${{ vars.FOLDER_NAME || 'hwmonitor' }}
-  GITHUB_REPO_URL: ${{ vars.GITHUB_REPO_URL || 'https://github.com/ondery/hwmonitor' }}
+  REPO_URL: https://github.com/ondery/hwmonitor
 
 jobs:
   build:
@@ -34,7 +34,7 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Setup .NET 9
+    - name: Setup .NET 10
       uses: actions/setup-dotnet@v4
       with:
         dotnet-version: '10.0.x'
@@ -86,7 +86,7 @@ jobs:
         if-no-files-found: warn
 
     - name: Create GitHub Release
-      uses: softprops/action-gh-release@v1
+      uses: softprops/action-gh-release@v2
       with:
         tag_name: ${{ env.EXTENSION_NAME }}-v${{ steps.version.outputs.VERSION }}
         name: "${{ env.EXTENSION_NAME }} Extension v${{ steps.version.outputs.VERSION }}"
@@ -110,7 +110,7 @@ jobs:
 
           ## More Information
 
-          Repository: ${{ env.GITHUB_REPO_URL }}
+          Repository: ${{ env.REPO_URL }}
         files: ${{ env.FOLDER_NAME }}/bin/Release/installer/*.exe
         draft: false
         prerelease: false

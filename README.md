@@ -225,7 +225,7 @@ The test project is plain .NET and does not need Windows. The extension, hardwar
 
 The extension project targets `net10.0-windows10.0.26100.0` with a minimum supported OS of 10.0.19041. The WinRT server library itself is built for Windows 10.0.22000, so use Windows 11 for a real run.
 
-GitHub Actions workflow `release-extension.yml` runs the same build on `windows-2022` with .NET 10 and Inno Setup. `update-winget.yml` submits later updates after a release named `HWMonitor Extension v…`.
+GitHub Actions workflow `release-extension.yml` runs the same build on `windows-2022` with .NET 10 and Inno Setup. `update-winget.yml` runs only when started by hand. It takes a version and an optional release tag (default `HWMonitor-v<version>`), checks that the release has both installers, and builds the updated manifests. It submits to WinGet only when the **submit** input is on and the `WINGET_TOKEN` secret holds a personal access token.
 
 SDK: `Microsoft.CommandPalette.Extensions` **0.12.260812002**. Dock bands shipped in 0.9 and are part of 0.12, which current Command Palette hosts load.
 
