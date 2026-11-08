@@ -22,8 +22,12 @@ internal sealed class MonitorSession : IDisposable
     private readonly CoolModeService _cool;
     private readonly AutoCoolController _autoCool = new();
     private readonly SensorBoard _board;
+    private readonly Dictionary<string, CoresPage> _corePages = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, string> _coreSignatures = new(StringComparer.Ordinal);
     private readonly Timer _timer;
     private int _busy;
+    private int _settingsGeneration;
+    private int _publishedGeneration;
     private bool _disposed;
 
     public MonitorSession(SettingsManager settings)
@@ -33,14 +37,14 @@ internal sealed class MonitorSession : IDisposable
         Page = new SensorsPage();
         _board = new SensorBoard(Page.Id, ToggleCool);
         Band = new WrappedDockItem([], CommandIds.Dock, UiText.AppName);
+        _timer = new Timer(_ => Tick(), null, Timeout.Infinite, Timeout.Infinite);
         _settings.Changed += (_, _) =>
         {
-            lock (Gate)
-            {
-                RestartTimer();
-            }
+            Interlocked.Increment(ref _settingsGeneration);
+            var period = Math.Max(1, _settings.Current.RefreshIntervalMs);
+            _timer.Change(TimeSpan.Zero, TimeSpan.FromMilliseconds(period));
+            Tick();
         };
-        _timer = new Timer(_ => Tick(), null, Timeout.Infinite, Timeout.Infinite);
     }
 
     private object Gate { get; } = new();
@@ -55,8 +59,6 @@ internal sealed class MonitorSession : IDisposable
         Tick();
         RestartTimer();
     }
-
-    public ICommandItem? Find(string id) => _board.Find(id);
 
     public void Dispose()
     {
@@ -83,20 +85,7 @@ internal sealed class MonitorSession : IDisposable
         _hardware.Dispose();
     }
 
-    private void ToggleCool()
-    {
-        var options = _settings.Current;
-        if (_cool.IsOn)
-        {
-            _cool.Disable();
-        }
-        else
-        {
-            _cool.Enable(options.Cool, activatedByAuto: false);
-        }
-
-        Tick();
-    }
+    private void ToggleCool() => _settings.CycleCoolMode();
 
     private void RestartTimer()
     {
@@ -137,20 +126,58 @@ internal sealed class MonitorSession : IDisposable
             var options = _settings.Current;
             var presented = readings.Select(options.Devices.Apply).ToArray();
             var package = presented.FirstOrDefault(reading => reading.Kind == DeviceKind.Cpu && reading.IsPrimary);
-            var action = _autoCool.Evaluate(options.AutoCool, _cool.IsOn, _cool.ActivatedByAuto, package?.TemperatureCelsius, DateTimeOffset.UtcNow);
-            if (action == AutoCoolAction.Activate)
+            switch (options.CoolMode)
             {
-                _cool.Enable(options.Cool, activatedByAuto: true);
-            }
-            else if (action == AutoCoolAction.Deactivate)
-            {
-                _cool.Disable();
+                case CoolSelection.On:
+                    if (!_cool.IsOn || _cool.ActivatedByAuto)
+                    {
+                        _cool.Enable(options.Cool, activatedByAuto: false);
+                    }
+
+                    break;
+                case CoolSelection.Off:
+                    if (_cool.IsOn)
+                    {
+                        _cool.Disable();
+                    }
+
+                    break;
+                default:
+                    if (_cool.IsOn && !_cool.ActivatedByAuto)
+                    {
+                        _cool.Disable();
+                    }
+
+                    var action = _autoCool.Evaluate(options.AutoCool with { Enabled = true }, _cool.IsOn, _cool.ActivatedByAuto, package?.TemperatureCelsius, DateTimeOffset.UtcNow);
+                    if (action == AutoCoolAction.Activate)
+                    {
+                        _cool.Enable(options.Cool, activatedByAuto: true);
+                    }
+                    else if (action == AutoCoolAction.Deactivate)
+                    {
+                        _cool.Disable();
+                    }
+
+                    break;
             }
 
+            var seenGeneration = Volatile.Read(ref _settingsGeneration);
             var specs = BuildSpecs(presented, options, serviceUp, serviceError);
-            var change = _board.Apply(specs);
-            Page.Publish(_board.ListItems(), change.ListChanged);
-            if (change.DockChanged)
+            if (Volatile.Read(ref _settingsGeneration) != seenGeneration)
+            {
+                options = _settings.Current;
+                presented = readings.Select(options.Devices.Apply).ToArray();
+                specs = BuildSpecs(presented, options, serviceUp, serviceError);
+            }
+
+            EnsureCorePages(specs);
+            var change = _board.Apply(specs, _corePages);
+            var generation = Volatile.Read(ref _settingsGeneration);
+            var force = generation != _publishedGeneration;
+            _publishedGeneration = generation;
+            Page.Publish(_board.ListItems(), change.ListChanged || force);
+            PublishCorePages(specs);
+            if (change.DockChanged || force)
             {
                 Band.Items = _board.DockItems();
             }
@@ -165,8 +192,84 @@ internal sealed class MonitorSession : IDisposable
         }
     }
 
+    private void EnsureCorePages(IReadOnlyList<RowSpec> specs)
+    {
+        foreach (var spec in specs)
+        {
+            if (!spec.OpensCores || spec.PackageReadingId is not string packageId)
+            {
+                continue;
+            }
+
+            var title = UiText.CoresPageTitle(spec.DockSubtitle);
+            if (!_corePages.TryGetValue(packageId, out var page))
+            {
+                _corePages.Add(packageId, new CoresPage(SensorIds.ToCoresPageId(packageId), title));
+                continue;
+            }
+
+            page.SetTitle(title);
+        }
+    }
+
+    private void PublishCorePages(IReadOnlyList<RowSpec> specs)
+    {
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var group in specs.Where(spec => spec.IsCore && spec.InList && spec.PackageReadingId is not null).GroupBy(spec => spec.PackageReadingId!))
+        {
+            seen.Add(group.Key);
+            if (!_corePages.TryGetValue(group.Key, out var page))
+            {
+                continue;
+            }
+
+            var signature = string.Join('\n', group.Select(spec => spec.CommandId));
+            var changed = !_coreSignatures.TryGetValue(group.Key, out var previous) || !string.Equals(previous, signature, StringComparison.Ordinal);
+            _coreSignatures[group.Key] = signature;
+            page.Publish(group.Select(spec => (IListItem)_board.ListItem(spec.CommandId)).ToArray(), changed);
+        }
+
+        foreach (var pair in _corePages)
+        {
+            if (seen.Contains(pair.Key))
+            {
+                continue;
+            }
+
+            if (_coreSignatures.TryGetValue(pair.Key, out var previous) && previous.Length == 0)
+            {
+                continue;
+            }
+
+            _coreSignatures[pair.Key] = string.Empty;
+            pair.Value.Publish([], true);
+        }
+    }
+
+    public ICommandItem? Find(string id)
+    {
+        foreach (var page in _corePages.Values)
+        {
+            if (string.Equals(page.Id, id, StringComparison.Ordinal))
+            {
+                return page.Link;
+            }
+        }
+
+        return _board.Find(id);
+    }
+
     private List<RowSpec> BuildSpecs(IReadOnlyList<SensorReading> readings, MonitorOptions options, bool serviceUp, string? serviceError)
     {
+        var packagesWithCores = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var reading in readings)
+        {
+            if (reading.Role == SensorRole.Core)
+            {
+                packagesWithCores.Add(DeviceIds.PackageId(reading.Id));
+            }
+        }
+
         var specs = new List<RowSpec> { CoolSpec(options) };
         var processors = new List<RowSpec>();
         var graphics = new List<RowSpec>();
@@ -197,18 +300,23 @@ internal sealed class MonitorSession : IDisposable
             var listSubtitle = hideMissing ? UiText.StatusServiceTitle : $"{reading.HardwareName} · {role}";
             var dockTitle = ReadingText.Value(reading.UsagePercent, reading.TemperatureCelsius, UiText.Unavailable, hideMissing, culture);
             var glyph = reading.Kind == DeviceKind.Cpu ? Glyphs.Cpu : Glyphs.Gpu;
+            var isCore = reading.Role == SensorRole.Core;
+            var opensCores = !isCore && reading.Kind == DeviceKind.Cpu && packagesWithCores.Contains(reading.Id);
             var row = new RowSpec(
                 SensorIds.ToCommandId(reading.Id),
                 dockTitle,
                 reading.ShortLabel,
                 listTitle,
                 listSubtitle,
-                reading.Kind == DeviceKind.Cpu ? UiText.SectionProcessors : UiText.SectionGraphics,
+                isCore ? string.Empty : reading.Kind == DeviceKind.Cpu ? UiText.SectionProcessors : UiText.SectionGraphics,
                 glyph,
                 SensorIcons.Temperature(reading.Kind, color, options.ColorDockIcons) ?? glyph,
                 options.Devices.AppearsInList(reading.Id, defaultList),
                 options.Devices.AppearsInDock(reading.Id, defaultDock),
-                color is RgbColor swatch ? StatusBadges.ForTemperature(band, swatch) : null);
+                color is RgbColor swatch ? StatusBadges.ForTemperature(band, swatch) : null,
+                isCore,
+                opensCores,
+                isCore ? DeviceIds.PackageId(reading.Id) : opensCores ? reading.Id : null);
             if (reading.Kind == DeviceKind.Cpu)
             {
                 processors.Add(row);
@@ -256,18 +364,33 @@ internal sealed class MonitorSession : IDisposable
             Glyphs.Status,
             true,
             false,
+            null,
+            false,
+            false,
             null);
 
     private RowSpec CoolSpec(MonitorOptions options)
     {
-        var on = _cool.IsOn;
-        var subtitle = _cool.LastError
-            ?? (on ? (_cool.ActivatedByAuto ? UiText.CoolAutoSubtitle : UiText.CoolOnSubtitle) : UiText.CoolOffSubtitle);
-        var icon = SensorIcons.Cool(on, options.Colors.Blue);
+        var selection = options.CoolMode;
+        var engaged = selection == CoolSelection.Auto && _cool.IsOn;
+        var subtitle = _cool.LastError ?? selection switch
+        {
+            CoolSelection.On => UiText.CoolOnSubtitle,
+            CoolSelection.Off => UiText.CoolOffSubtitle,
+            _ => engaged ? UiText.CoolAutoSubtitle : UiText.CoolAutoIdleSubtitle,
+        };
+        var icon = SensorIcons.Cool(selection, engaged || selection == CoolSelection.On, options.Colors.Blue);
+        var dockTitle = selection switch
+        {
+            CoolSelection.On => UiText.CoolDockOn,
+            CoolSelection.Off => UiText.CoolDockOff,
+            _ => UiText.CoolDockAuto,
+        };
+        var dockSubtitle = engaged ? UiText.CoolDockEngaged : UiText.CoolDockLabel;
         return new RowSpec(
             CommandIds.Cool,
-            on ? UiText.CoolDockOn : UiText.CoolDockOff,
-            UiText.CoolDockLabel,
+            dockTitle,
+            dockSubtitle,
             UiText.CoolTitle,
             subtitle,
             UiText.SectionCooling,
@@ -275,7 +398,10 @@ internal sealed class MonitorSession : IDisposable
             icon,
             true,
             true,
-            StatusBadges.ForCool(on, options.Colors.Blue));
+            StatusBadges.ForCool(selection, options.Colors.Blue),
+            false,
+            false,
+            null);
     }
 }
 
@@ -290,7 +416,10 @@ internal sealed record RowSpec(
     string DockIcon,
     bool InList,
     bool InDock,
-    StatusBadge? Badge);
+    StatusBadge? Badge,
+    bool IsCore,
+    bool OpensCores,
+    string? PackageReadingId);
 
 internal sealed class SensorBoard
 {
@@ -306,7 +435,7 @@ internal sealed class SensorBoard
         _toggleCool = toggleCool;
     }
 
-    public (bool ListChanged, bool DockChanged) Apply(IReadOnlyList<RowSpec> specs)
+    public (bool ListChanged, bool DockChanged) Apply(IReadOnlyList<RowSpec> specs, IReadOnlyDictionary<string, CoresPage> corePages)
     {
         var seen = new HashSet<string>(StringComparer.Ordinal);
         foreach (var spec in specs)
@@ -314,11 +443,11 @@ internal sealed class SensorBoard
             seen.Add(spec.CommandId);
             if (!_rows.TryGetValue(spec.CommandId, out var row))
             {
-                row = BoundRow.Create(spec, _pageId, _toggleCool);
+                row = BoundRow.Create(spec, _pageId, _toggleCool, corePages);
                 _rows.Add(spec.CommandId, row);
             }
 
-            row.Update(spec);
+            row.Update(spec, corePages);
         }
 
         foreach (var stale in _rows.Keys.Where(id => !seen.Contains(id)).ToArray())
@@ -326,7 +455,7 @@ internal sealed class SensorBoard
             _rows.Remove(stale);
         }
 
-        var listOrder = specs.Where(spec => spec.InList).Select(spec => spec.CommandId).ToList();
+        var listOrder = specs.Where(spec => spec.InList && !spec.IsCore).Select(spec => spec.CommandId).ToList();
         var dockOrder = specs.Where(spec => spec.InDock).Select(spec => spec.CommandId).ToList();
         var listChanged = !listOrder.SequenceEqual(_listOrder);
         var dockChanged = !dockOrder.SequenceEqual(_dockOrder);
@@ -336,6 +465,8 @@ internal sealed class SensorBoard
     }
 
     public IListItem[] ListItems() => _listOrder.Select(id => (IListItem)_rows[id].List).ToArray();
+
+    public ListItem ListItem(string id) => _rows[id].List;
 
     public IListItem[] DockItems() => _dockOrder.Select(id => (IListItem)_rows[id].Dock).ToArray();
 
@@ -349,10 +480,13 @@ internal sealed class BoundRow
     private string _listBadge = string.Empty;
     private string _dockBadge = string.Empty;
 
-    private BoundRow(ListItem list, ListItem dock, string listIcon, string dockIcon)
+    private readonly ICommand _pageCommand;
+
+    private BoundRow(ListItem list, ListItem dock, ICommand pageCommand, string listIcon, string dockIcon)
     {
         List = list;
         Dock = dock;
+        _pageCommand = pageCommand;
         _listIcon = listIcon;
         _dockIcon = dockIcon;
     }
@@ -361,20 +495,39 @@ internal sealed class BoundRow
 
     public ListItem Dock { get; }
 
-    public static BoundRow Create(RowSpec spec, string pageId, Action toggleCool)
+    public static BoundRow Create(RowSpec spec, string pageId, Action toggleCool, IReadOnlyDictionary<string, CoresPage> corePages)
     {
-        var command = spec.CommandId == CommandIds.Cool
-            ? new CallbackCommand(spec.CommandId, UiText.CoolTitle, toggleCool)
-            : (ICommand)new OpenPageCommand(spec.CommandId, pageId, spec.DockSubtitle.Length == 0 ? spec.ListTitle : spec.DockSubtitle);
-        var list = new ListItem(command) { Icon = new IconInfo(spec.ListIcon) };
-        var dock = new ListItem(command) { Icon = new IconInfo(spec.DockIcon) };
-        return new BoundRow(list, dock, spec.ListIcon, spec.DockIcon);
+        var pageCommand = spec.CommandId == CommandIds.Cool
+            ? (ICommand)new CallbackCommand(spec.CommandId, UiText.CoolTitle, toggleCool)
+            : new OpenPageCommand(spec.CommandId, pageId, spec.DockSubtitle.Length == 0 ? spec.ListTitle : spec.DockSubtitle);
+        var listCommand = ListCommand(spec, pageCommand, corePages);
+        var list = new ListItem(listCommand) { Icon = new IconInfo(spec.ListIcon) };
+        var dock = new ListItem(pageCommand) { Icon = new IconInfo(spec.DockIcon) };
+        return new BoundRow(list, dock, pageCommand, spec.ListIcon, spec.DockIcon);
     }
 
-    public void Update(RowSpec spec)
+    public void Update(RowSpec spec, IReadOnlyDictionary<string, CoresPage> corePages)
     {
+        var listCommand = ListCommand(spec, _pageCommand, corePages);
+        if (!ReferenceEquals(List.Command, listCommand))
+        {
+            List.Command = listCommand;
+        }
+
         Set(List, spec.ListTitle, spec.ListSubtitle, spec.Section, spec.ListIcon, spec.Badge, ref _listIcon, ref _listBadge);
         Set(Dock, spec.DockTitle, spec.DockSubtitle, string.Empty, spec.DockIcon, null, ref _dockIcon, ref _dockBadge);
+    }
+
+    private static ICommand ListCommand(RowSpec spec, ICommand pageCommand, IReadOnlyDictionary<string, CoresPage> corePages)
+    {
+        if (spec.OpensCores
+            && spec.PackageReadingId is string packageId
+            && corePages.TryGetValue(packageId, out var cores))
+        {
+            return cores;
+        }
+
+        return pageCommand;
     }
 
     private static void Set(

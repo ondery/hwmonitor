@@ -25,25 +25,19 @@ The pictures in this README are design mockups rendered in a dark Windows 11 sty
 
 ## Screenshots
 
-### Dock
-
-![Dock mockup](docs/images/dock.png)
+Replace `docs/images/list.png`, `docs/images/dock.png`, and `docs/images/settings.png` with screenshots from Command Palette. The paths stay the same.
 
 ### Sensor list
 
-![Sensor list mockup](docs/images/sensors.png)
+![Sensor list](docs/images/list.png)
+
+### Dock
+
+![Dock](docs/images/dock.png)
 
 ### Settings
 
-![Settings mockup](docs/images/settings.png)
-
-### Cool Mode
-
-![Cool Mode mockup](docs/images/cool-mode.png)
-
-### Color levels
-
-![Color level diagram](docs/images/color-levels.png)
+![Settings](docs/images/settings.png)
 
 ## Install
 
@@ -143,7 +137,7 @@ Each sensor object has `hardwareId`, `hardwareName`, `kind` (`cpu` or `gpu`), `g
 
 Open Command Palette and run **HW Monitor**. The page groups rows into **Cooling**, **Processors**, and **Graphics**:
 
-- **Cool Mode**, titled **Cool Mode**, with a **Cool ON** or **Cool OFF** tag and a different icon for each state
+- **Cool Mode**, titled **Cool Mode**. Each press cycles **Auto**, **Cool On**, and **Cool Off**. The badge uses those words. Auto keeps the badge text **Auto** and uses the subtitle when cooling is engaged. Clicking a processor row opens its cores.
 - Each CPU package and, unless compact mode is on, each core, titled like `CPU 27% · 58°C`, with the hardware name and role underneath and a Cool, Warm, Hot, or Critical tag
 - Each Intel, AMD, or NVIDIA GPU, integrated or discrete, in the same shape
 
@@ -172,7 +166,8 @@ Settings open as a grouped form. Each field has a label and a short line that sa
 | Cool Mode | Processor cap | Number, 1–100 | 99% | Cool Mode on the active power scheme |
 | Cool Mode | Also set processor boost mode | Toggle | On | Cool Mode |
 | Cool Mode | Boost mode | Dropdown, Disabled or Efficient | Disabled | Cool Mode, while boost limiting is on |
-| Cool Mode | Auto Cool Mode and its temperatures and timers | Toggle and numbers | Off; 85 °C for 10 s on, 70 °C for 10 s off | Cool Mode auto-trigger |
+| Cool Mode | Mode | Dropdown, Auto / Cool On / Cool Off | Off. An older Auto Cool switch that was on loads as Auto | List and Dock. Pressing Cool Mode cycles the same states |
+| Cool Mode | Auto temperatures and timers | Numbers | 85 °C for 10 s on, 70 °C for 10 s off | Auto Cool |
 | Devices | Short label, full name, list, dock | Text and dropdowns | Shown after the first sensor refresh | Short label: list and Dock. Full name and list choice: list. Dock choice: Dock |
 
 A previously saved hex color that matches a named color, or sits very close to one, loads as that name. Any other hex loads as Custom and the hex is kept. Empty device names keep the detected label. The choice is stored against the sensor library's hardware id.
@@ -187,13 +182,11 @@ Cool Mode is the laptop-style turbo limit used by many processor utilities. It w
 
 On the **active** Windows power scheme it sets **Maximum processor state** (`PROCTHROTTLEMAX`, AC and DC) to the configured cap. The default, 99%, disables turbo boost on most Intel and AMD processors while leaving the CPU usable. Optionally it also sets **Processor performance boost mode** (`PERFBOOSTMODE`) to Disabled (`0`) or Efficient (`3`). The scheme is reapplied with `powercfg /setactive`.
 
-Before anything is changed, the original AC and DC indexes are saved. They are written back when:
+Pressing Cool Mode cycles three saved states: **Auto**, **Cool On**, then **Cool Off**. The list badge uses those words. The dock icon and subtitle follow the same state. **Cool On** keeps the cap applied. **Cool Off** leaves the scheme alone and ignores the temperature trigger. **Auto** turns the cap on only after the processor package stays at or above the high threshold for N seconds, and turns it off after the package stays at or below the low threshold for N seconds. While Auto has engaged cooling, the badge still says **Auto** and the subtitle says the processor stayed hot.
 
-- you turn Cool Mode off
-- the extension exits
-- the process did not exit cleanly, on the next start
+The choice is stored in the extension settings and kept across restarts. An older Auto Cool switch that was on loads as **Auto**. Otherwise the mode loads as **Cool Off**.
 
-Auto Cool Mode turns the cap on only after the CPU package stays at or above the high threshold for N seconds, and turns it off after the package stays at or below the low threshold for N seconds. A manual Cool Mode session is not turned off by the automatic low threshold.
+Before anything is changed, the original AC and DC indexes are saved. They are written back when the mode is **Cool Off**, when the extension exits, and on the next start if the process did not exit cleanly. **Cool On** applies the cap again after that restore.
 
 If Windows denies the change, Cool Mode stays off and the row says: **Cool Mode could not change the active power scheme. Start Command Palette as administrator and try again.**
 

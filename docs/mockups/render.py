@@ -112,8 +112,7 @@ def main(only: set[str] | None = None) -> None:
         <div class="section">Cooling</div>
         <div class="row"><div class="glyph">C</div><div><div class="title">Cool Mode</div><div class="sub">Click to limit processor turbo on the active power scheme.</div></div><b>Cool OFF</b></div>
         <div class="section">Processors</div>
-        <div class="row"><div class="glyph">CPU</div><div><div class="title">CPU 27% · 58°C</div><div class="sub">Processor · Package</div></div><span class="tag" style="background:#3b82f6;color:white">Cool</span></div>
-        <div class="row"><div class="glyph">CPU</div><div><div class="title">Core 2 31% · 61°C</div><div class="sub">Processor · Core 2</div></div><span class="tag" style="background:#eab308;color:#111827">Warm</span></div>
+        <div class="row"><div class="glyph">CPU</div><div><div class="title">CPU 27% · 58°C</div><div class="sub">Processor · Package. Open for cores.</div></div><span class="tag" style="background:#14b8a6;color:#111827">Auto</span></div>
         <div class="section">Graphics</div>
         <div class="row"><div class="glyph">iG</div><div><div class="title">iGPU 4% · 58°C</div><div class="sub">Integrated graphics · Package (shared die)</div></div><span class="tag" style="background:#3b82f6;color:white">Cool</span></div>
         <div class="row"><div class="glyph">GPU</div><div><div class="title">GPU 58% · 81°C</div><div class="sub">Discrete graphics · Adapter</div></div><span class="tag" style="background:#f97316;color:#111827">Hot</span></div>
@@ -175,7 +174,7 @@ def main(only: set[str] | None = None) -> None:
     shots = [
         ("banner", banner, 1280, 420, OUT / "banner.png"),
         ("dock", dock, 1280, 220, OUT / "dock.png"),
-        ("sensors", sensors, 1040, 760, OUT / "sensors.png"),
+        ("list", sensors, 1040, 760, OUT / "list.png"),
         ("settings", settings, 1040, 1460, OUT / "settings.png"),
         ("cool-mode", cool, 1040, 520, OUT / "cool-mode.png"),
         ("color-levels", colors, 1100, 360, OUT / "color-levels.png"),

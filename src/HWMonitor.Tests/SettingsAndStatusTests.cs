@@ -72,7 +72,7 @@ public class SettingsAndStatusTests
             [SettingsKeys.Preset(SettingsKeys.Yellow)] = "amber",
             [SettingsKeys.CoolMax] = "150",
             [SettingsKeys.BoostMode] = "3",
-            [SettingsKeys.Auto] = "true",
+            [SettingsKeys.CoolSelection] = "auto",
             [SettingsKeys.AutoOn] = "70",
             [SettingsKeys.AutoOff] = "80",
         };
@@ -149,48 +149,149 @@ public class SettingsAndStatusTests
     }
 
     [Fact]
-    public void Settings_card_groups_typed_inputs_and_states_where_each_one_applies()
+    public void Settings_card_is_compact_and_picks_colors_from_swatches()
     {
+        const string packageId = "cpu:/cpu/0";
+        const string coreId = "cpu:/cpu/0:core:2";
         var state = SettingsFormStateFactory.FromStored(
             new Dictionary<string, string?>(),
-            [new DeviceSettingSeed("cpu:/cpu/0", "CPU", "Processor", null, null, VisibilityChoice.Default, VisibilityChoice.Default)]);
-        var json = SettingsCard.Build(state);
-        var card = JsonNode.Parse(json)!.AsObject();
-        var body = card["body"]!.AsArray();
-        Assert.Equal(
-            ["General", "Temperature colors", "Cool Mode", "Devices"],
-            body.Select(item => item!["items"]![0]!["text"]!.GetValue<string>()).ToArray());
-
-        var nodes = Walk(card).ToArray();
+            [
+                new DeviceSettingSeed(packageId, "CPU", "Processor", null, null, VisibilityChoice.Default, VisibilityChoice.Default),
+                new DeviceSettingSeed(coreId, "Core 2", "Processor", null, null, VisibilityChoice.Default, VisibilityChoice.Default),
+            ]);
+        var json = SettingsCard.Build(state, UiText.SettingsSaved, false);
+        var nodes = Walk(JsonNode.Parse(json)).ToArray();
         var refresh = nodes.Single(node => node["id"]?.GetValue<string>() == SettingsKeys.Refresh);
         Assert.Equal("Input.Number", refresh["type"]!.GetValue<string>());
         Assert.Equal(500, refresh["min"]!.GetValue<int>());
         Assert.Equal(3000, refresh["max"]!.GetValue<int>());
+        var general = nodes.Single(node => node["id"]?.GetValue<string>() == "fold-general");
+        Assert.False(general["isVisible"]!.GetValue<bool>());
+        Assert.Contains(nodes, node => node["type"]?.GetValue<string>() == "Action.ToggleVisibility");
+        Assert.Contains(nodes, node => node["type"]?.GetValue<string>() == "ColumnSet");
         Assert.Contains(nodes, node => node["type"]?.GetValue<string>() == "Input.Toggle" && node["id"]?.GetValue<string>() == SettingsKeys.DockColorIcons);
-        Assert.Contains(nodes, node => node["type"]?.GetValue<string>() == "Input.Toggle" && node["id"]?.GetValue<string>() == SettingsKeys.Compact);
-        var color = nodes.Single(node => node["id"]?.GetValue<string>() == SettingsKeys.Preset(SettingsKeys.Blue));
-        Assert.Equal("Input.ChoiceSet", color["type"]!.GetValue<string>());
-        Assert.Equal("compact", color["style"]!.GetValue<string>());
-        Assert.Equal("blue", color["value"]!.GetValue<string>());
-        var titles = color["choices"]!.AsArray().Select(choice => choice!["title"]!.GetValue<string>()).ToArray();
-        Assert.Contains("Blue", titles);
-        Assert.Contains("Custom", titles);
-        Assert.Contains(nodes, node => node["id"]?.GetValue<string>() == SettingsKeys.Custom(SettingsKeys.Blue) && node["type"]?.GetValue<string>() == "Input.Text");
-        Assert.Contains("Applies to the Dock only", json, StringComparison.Ordinal);
-        Assert.Contains("Applies to the list page and Dock", json, StringComparison.Ordinal);
-        Assert.Contains("Applies to the list page.", json, StringComparison.Ordinal);
-        Assert.Contains("Used by Cool Mode auto-trigger", json, StringComparison.Ordinal);
-        Assert.Contains("Used by Cool Mode.", json, StringComparison.Ordinal);
-        Assert.Contains("hwmonitor.device.f57c9201081aab8bca82.short", json, StringComparison.Ordinal);
+        Assert.DoesNotContain(nodes, node => node["id"]?.GetValue<string>() == SettingsKeys.Preset(SettingsKeys.Blue));
+        var swatch = nodes.First(node => node["type"]?.GetValue<string>() == "Image" && node["selectAction"] is not null);
+        Assert.StartsWith("data:image/png;base64,", swatch["url"]!.GetValue<string>(), StringComparison.Ordinal);
+        Assert.Equal("Action.Submit", swatch["selectAction"]!["type"]!.GetValue<string>());
+        Assert.Equal("color", swatch["selectAction"]!["data"]![SettingsKeys.Pick]!.GetValue<string>());
+        var cores = nodes.Single(node => node["id"]?.GetValue<string>() == SettingsKeys.CoresFold(packageId));
+        Assert.False(cores["isVisible"]!.GetValue<bool>());
+        Assert.Contains(SettingsKeys.Device(coreId, "short"), cores.ToJsonString(), StringComparison.Ordinal);
+        Assert.DoesNotContain(SettingsKeys.Device(packageId, "short"), cores.ToJsonString(), StringComparison.Ordinal);
+        var advanced = nodes.Single(node => node["id"]?.GetValue<string>() == "fold-advanced");
+        Assert.False(advanced["isVisible"]!.GetValue<bool>());
+        Assert.Contains(SettingsKeys.Custom(SettingsKeys.Blue), advanced.ToJsonString(), StringComparison.Ordinal);
+        Assert.Contains(nodes, node => node["text"]?.GetValue<string>() == UiText.SettingScopeListDock);
+        Assert.Contains(nodes, node => node["text"]?.GetValue<string>() == UiText.SettingScopeDock);
+        Assert.Contains(nodes, node => node["text"]?.GetValue<string>() == UiText.SettingScopeCool);
+        Assert.Contains(nodes, node => node["text"]?.GetValue<string>() == UiText.SettingScopeAuto);
+        Assert.Contains(nodes, node => node["text"]?.GetValue<string>() == UiText.SettingsSaved);
         Assert.DoesNotContain(DockProperties.TitleWidth, json, StringComparison.Ordinal);
-        Assert.DoesNotContain(DockProperties.SubtitleWidth, json, StringComparison.Ordinal);
         Assert.DoesNotContain(DockProperties.TabularDigits, json, StringComparison.Ordinal);
-        foreach (var preset in ColorPresets.Palette)
-        {
-            Assert.DoesNotContain("ColorPreset_", UiText.ColorPreset(preset.Id), StringComparison.Ordinal);
-        }
+        Assert.Equal("cpu:/cpu/0", DeviceIds.PackageId(coreId));
+        Assert.StartsWith("com.ondery.hwmonitor.cores.", SensorIds.ToCoresPageId(packageId), StringComparison.Ordinal);
+    }
 
-        Assert.Equal("Custom", UiText.ColorPreset(ColorPresets.CustomId));
+    [Fact]
+    public void Submit_round_trip_reloads_saved_values_and_reports_reordering()
+    {
+        const string id = "cpu:/cpu/0";
+        var current = SettingsFormStateFactory.FromStored(
+            new Dictionary<string, string?>(),
+            [new DeviceSettingSeed(id, "CPU", "Processor", null, null, VisibilityChoice.Default, VisibilityChoice.Default)]);
+        var submitted = new Dictionary<string, string?>
+        {
+            [SettingsKeys.Refresh] = "90",
+            [SettingsKeys.DockColorIcons] = "false",
+            [SettingsKeys.BlueBelow] = "80",
+            [SettingsKeys.YellowFrom] = "60",
+            [SettingsKeys.OrangeFrom] = "70",
+            [SettingsKeys.RedFrom] = "90",
+            [SettingsKeys.CoolMax] = "150",
+            [SettingsKeys.Auto] = "true",
+            [SettingsKeys.AutoOn] = "70",
+            [SettingsKeys.AutoOff] = "80",
+            [SettingsKeys.Custom(SettingsKeys.Blue)] = "#zzzz",
+            [SettingsKeys.Device(id, "dock")] = "show",
+            [SettingsKeys.Device(id, "short")] = "Pkg",
+        };
+        var applied = SettingsFormStateFactory.Apply(submitted, current);
+        Assert.Equal(500, applied.State.RefreshIntervalMs);
+        Assert.False(applied.State.ColorDockIcons);
+        Assert.Equal(80, applied.State.BlueBelow);
+        Assert.Equal(80, applied.State.YellowFrom);
+        Assert.Equal(81, applied.State.OrangeFrom);
+        Assert.Equal(100, applied.State.CoolMaximum);
+        Assert.Equal(69, applied.State.AutoOffCelsius);
+        Assert.Equal("blue", applied.State.Blue.PresetId);
+        Assert.Equal("Pkg", applied.State.Devices[0].ShortLabel);
+        Assert.Equal(VisibilityChoice.Show, applied.State.Devices[0].Dock);
+        var notes = string.Join(' ', applied.Notices);
+        Assert.Contains("limited to 500", notes, StringComparison.Ordinal);
+        Assert.Contains("kept in order", notes, StringComparison.Ordinal);
+        Assert.Contains("not a color", notes, StringComparison.Ordinal);
+        Assert.Contains("lowered to 69", notes, StringComparison.Ordinal);
+
+        var persisted = applied.State.ToStoredValues().ToDictionary(pair => pair.Key, pair => (string?)pair.Value, StringComparer.Ordinal);
+        var seeds = applied.State.Devices.Select(device => new DeviceSettingSeed(
+            device.Id,
+            device.DefaultShort,
+            device.DefaultFull,
+            persisted[SettingsKeys.Device(device.Id, "short")],
+            persisted[SettingsKeys.Device(device.Id, "full")],
+            PresentationMap.ParseVisibility(persisted[SettingsKeys.Device(device.Id, "list")]),
+            PresentationMap.ParseVisibility(persisted[SettingsKeys.Device(device.Id, "dock")]))).ToArray();
+        var json = System.Text.Json.JsonSerializer.Serialize(applied.State.ToStoredValues());
+        var reloaded = SettingsFormStateFactory.FromStored(SettingsPayload.Read(json), seeds);
+        Assert.Equal(applied.State.RefreshIntervalMs, reloaded.RefreshIntervalMs);
+        Assert.Equal(applied.State.ColorDockIcons, reloaded.ColorDockIcons);
+        Assert.Equal(applied.State.BlueBelow, reloaded.BlueBelow);
+        Assert.Equal(applied.State.YellowFrom, reloaded.YellowFrom);
+        Assert.Equal(applied.State.OrangeFrom, reloaded.OrangeFrom);
+        Assert.Equal(applied.State.RedFrom, reloaded.RedFrom);
+        Assert.Equal(applied.State.CoolMaximum, reloaded.CoolMaximum);
+        Assert.Equal(applied.State.AutoOffCelsius, reloaded.AutoOffCelsius);
+        Assert.Equal(applied.State.Blue.Color, reloaded.Blue.Color);
+        Assert.Equal("Pkg", reloaded.Devices[0].ShortLabel);
+        Assert.Equal(VisibilityChoice.Show, reloaded.Devices[0].Dock);
+        var png = ColorSwatches.Encode(RgbColor.Blue, selected: false);
+        Assert.Equal(new byte[] { 137, 80, 78, 71, 13, 10, 26, 10 }, png.Take(8).ToArray());
+        Assert.NotEqual(ColorSwatches.DataUri(RgbColor.Blue, false), ColorSwatches.DataUri(RgbColor.Blue, true));
+    }
+
+    [Fact]
+    public void Cool_mode_cycles_and_the_choice_survives_a_reload()
+    {
+        Assert.Equal(CoolSelection.On, CoolSelectionCycle.Next(CoolSelection.Auto));
+        Assert.Equal(CoolSelection.Off, CoolSelectionCycle.Next(CoolSelection.On));
+        Assert.Equal(CoolSelection.Auto, CoolSelectionCycle.Next(CoolSelection.Off));
+        Assert.Equal(CoolSelection.Auto, CoolSelectionCycle.Parse(null, true));
+        Assert.Equal(CoolSelection.Off, CoolSelectionCycle.Parse(null, false));
+        Assert.Equal(CoolSelection.Off, CoolSelectionCycle.Parse(" ", null));
+        Assert.Equal(CoolSelection.On, CoolSelectionCycle.Parse("on", true));
+
+        var legacy = SettingsFormStateFactory.FromStored(
+            new Dictionary<string, string?> { [SettingsKeys.Auto] = "true" },
+            []);
+        Assert.Equal(CoolSelection.Auto, legacy.Selection);
+        Assert.True(legacy.ToOptions().AutoCool.Enabled);
+        Assert.Equal("auto", legacy.ToStoredValues()[SettingsKeys.CoolSelection]);
+
+        var manual = SettingsFormStateFactory.FromStored(new Dictionary<string, string?>(), []);
+        Assert.Equal(CoolSelection.Off, manual.Selection);
+        Assert.False(manual.ToOptions().AutoCool.Enabled);
+
+        var saved = SettingsFormStateFactory.Apply(
+            new Dictionary<string, string?> { [SettingsKeys.CoolSelection] = "on" },
+            manual);
+        Assert.Equal(CoolSelection.On, saved.State.Selection);
+        Assert.False(saved.State.ToOptions().AutoCool.Enabled);
+        var json = System.Text.Json.JsonSerializer.Serialize(saved.State.ToStoredValues());
+        var loaded = SettingsFormStateFactory.FromStored(SettingsPayload.Read(json), []);
+        Assert.Equal(CoolSelection.On, loaded.Selection);
+        Assert.Equal(CoolSelection.Off, CoolSelectionCycle.Next(loaded.Selection));
+        Assert.Equal(CoolSelection.Auto, CoolSelectionCycle.Next(CoolSelectionCycle.Next(loaded.Selection)));
     }
 
     [Fact]
@@ -211,11 +312,14 @@ public class SettingsAndStatusTests
         Assert.Equal("#EF4444", critical.Value.Background.ToHex());
         Assert.Null(StatusBadges.ForTemperature(TemperatureBand.Unknown, RgbColor.Blue));
 
-        var on = StatusBadges.ForCool(true, RgbColor.Blue);
-        var off = StatusBadges.ForCool(false, RgbColor.Blue);
-        Assert.Equal("Cool ON", on.Text);
-        Assert.Equal("Cool OFF", off.Text);
+        var on = StatusBadges.ForCool(CoolSelection.On, RgbColor.Blue);
+        var off = StatusBadges.ForCool(CoolSelection.Off, RgbColor.Blue);
+        var auto = StatusBadges.ForCool(CoolSelection.Auto, RgbColor.Blue);
+        Assert.Equal("Cool On", on.Text);
+        Assert.Equal("Cool Off", off.Text);
+        Assert.Equal("Auto", auto.Text);
         Assert.NotEqual(on.Background, off.Background);
+        Assert.NotEqual(auto.Background, on.Background);
         Assert.Equal("Cooling", UiText.SectionCooling);
         Assert.Equal("Processors", UiText.SectionProcessors);
         Assert.Equal("Graphics", UiText.SectionGraphics);
@@ -236,11 +340,15 @@ public class SettingsAndStatusTests
         Assert.DoesNotContain(DockProperties.SubtitleWidth, colored, StringComparison.Ordinal);
         Assert.DoesNotContain(DockProperties.TabularDigits, colored, StringComparison.Ordinal);
 
-        var on = SensorIcons.Cool(true, RgbColor.Blue);
-        var off = SensorIcons.Cool(false, RgbColor.Blue);
+        var on = SensorIcons.Cool(CoolSelection.On, false, RgbColor.Blue);
+        var off = SensorIcons.Cool(CoolSelection.Off, false, RgbColor.Blue);
+        var auto = SensorIcons.Cool(CoolSelection.Auto, false, RgbColor.Blue);
+        var engaged = SensorIcons.Cool(CoolSelection.Auto, true, RgbColor.Blue);
         Assert.StartsWith("|ThemedSvg|#3B82F6|", on, StringComparison.Ordinal);
         Assert.StartsWith("|ThemedSvg|#64748B|", off, StringComparison.Ordinal);
         Assert.NotEqual(on, off);
+        Assert.NotEqual(auto, engaged);
+        Assert.NotEqual(auto, on);
         Assert.DoesNotContain(DockProperties.TitleWidth, on, StringComparison.Ordinal);
     }
 

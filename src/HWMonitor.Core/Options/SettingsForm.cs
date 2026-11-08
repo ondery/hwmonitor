@@ -9,6 +9,7 @@ using System.Text.Json.Nodes;
 using HWMonitor.Core.Colors;
 using HWMonitor.Core.Power;
 using HWMonitor.Core.Sensors;
+using HWMonitor.Core.Text;
 
 namespace HWMonitor.Core.Options;
 
@@ -25,6 +26,7 @@ public static class SettingsKeys
     public const string Yellow = "hwmonitor.color.yellow";
     public const string Orange = "hwmonitor.color.orange";
     public const string Red = "hwmonitor.color.red";
+    public const string CoolSelection = "hwmonitor.cool.selection";
     public const string CoolMax = "hwmonitor.cool.maxProcessorState";
     public const string CoolBoost = "hwmonitor.cool.limitBoost";
     public const string BoostMode = "hwmonitor.cool.boostMode";
@@ -33,6 +35,7 @@ public static class SettingsKeys
     public const string AutoOnSeconds = "hwmonitor.autoCool.activateSeconds";
     public const string AutoOff = "hwmonitor.autoCool.deactivateCelsius";
     public const string AutoOffSeconds = "hwmonitor.autoCool.deactivateSeconds";
+    public const string Pick = "hwmonitor.pick";
 
     public static string Preset(string colorKey) => colorKey + ".preset";
 
@@ -43,6 +46,8 @@ public static class SettingsKeys
         var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(id))).ToLowerInvariant();
         return $"hwmonitor.device.{hash[..20]}.{part}";
     }
+
+    public static string CoresFold(string packageId) => "cores-" + Device(packageId, "fold").Split('.')[2];
 }
 
 public sealed record DeviceSettingSeed(
@@ -78,6 +83,7 @@ public sealed record SettingsFormState(
     int CoolMaximum,
     bool LimitBoost,
     int BoostValue,
+    CoolSelection Selection,
     bool AutoEnabled,
     int AutoOnCelsius,
     int AutoOnSeconds,
@@ -103,7 +109,8 @@ public sealed record SettingsFormState(
             ColorDockIcons,
             Colors,
             new CoolOptions(CoolMaximum, LimitBoost, BoostValue),
-            new AutoCoolOptions(AutoEnabled, AutoOnCelsius, AutoOnSeconds, AutoOffCelsius, AutoOffSeconds),
+            Selection,
+            new AutoCoolOptions(Selection == CoolSelection.Auto, AutoOnCelsius, AutoOnSeconds, AutoOffCelsius, AutoOffSeconds),
             PresentationMap.FromEntries(entries));
     }
 
@@ -125,7 +132,8 @@ public sealed record SettingsFormState(
             [SettingsKeys.CoolMax] = CoolMaximum.ToString(CultureInfo.InvariantCulture),
             [SettingsKeys.CoolBoost] = Flag(LimitBoost),
             [SettingsKeys.BoostMode] = BoostValue == PowerGuids.BoostEfficient ? "3" : "0",
-            [SettingsKeys.Auto] = Flag(AutoEnabled),
+            [SettingsKeys.CoolSelection] = CoolSelectionCycle.Token(Selection),
+            [SettingsKeys.Auto] = Flag(Selection == CoolSelection.Auto),
             [SettingsKeys.AutoOn] = AutoOnCelsius.ToString(CultureInfo.InvariantCulture),
             [SettingsKeys.AutoOnSeconds] = AutoOnSeconds.ToString(CultureInfo.InvariantCulture),
             [SettingsKeys.AutoOff] = AutoOffCelsius.ToString(CultureInfo.InvariantCulture),
@@ -213,8 +221,29 @@ public static class SettingsPayload
     }
 }
 
+public sealed record SettingsApplyResult(SettingsFormState State, IReadOnlyList<string> Notices);
+
 public static class SettingsFormStateFactory
 {
+    public static SettingsApplyResult Apply(IReadOnlyDictionary<string, string?> submitted, SettingsFormState current)
+    {
+        var notices = new List<string>();
+        NoteNumber(notices, submitted, SettingsKeys.Refresh, UiText.SettingRefreshShort, 500, 3000);
+        NoteNumber(notices, submitted, SettingsKeys.CoolMax, UiText.SettingCoolMaxShort, 1, 100);
+        NoteInvalidHex(notices, submitted, SettingsKeys.Blue, UiText.TagBlue);
+        NoteInvalidHex(notices, submitted, SettingsKeys.Yellow, UiText.TagYellow);
+        NoteInvalidHex(notices, submitted, SettingsKeys.Orange, UiText.TagOrange);
+        NoteInvalidHex(notices, submitted, SettingsKeys.Red, UiText.TagRed);
+        var state = FromSubmission(submitted, current);
+        NoteBands(notices, submitted, state);
+        if (SubmittedInt(submitted, SettingsKeys.AutoOff) is int off && off != state.AutoOffCelsius)
+        {
+            notices.Add(UiText.SettingsAutoOffLowered(state.AutoOffCelsius));
+        }
+
+        return new SettingsApplyResult(state, notices);
+    }
+
     public static SettingsFormState FromStored(
         IReadOnlyDictionary<string, string?> stored,
         IReadOnlyList<DeviceSettingSeed> devices)
@@ -236,8 +265,11 @@ public static class SettingsFormStateFactory
             ReadInt(stored, SettingsKeys.CoolMax, 99),
             ReadBool(stored, SettingsKeys.CoolBoost, true),
             Read(stored, SettingsKeys.BoostMode) == "3" ? PowerGuids.BoostEfficient : PowerGuids.BoostDisabled);
+        var selection = CoolSelectionCycle.Parse(
+            Read(stored, SettingsKeys.CoolSelection),
+            stored.ContainsKey(SettingsKeys.Auto) ? ReadBool(stored, SettingsKeys.Auto, false) : null);
         var auto = AutoCoolOptions.Normalize(
-            ReadBool(stored, SettingsKeys.Auto, false),
+            selection == CoolSelection.Auto,
             ReadInt(stored, SettingsKeys.AutoOn, 85),
             ReadInt(stored, SettingsKeys.AutoOnSeconds, 10),
             ReadInt(stored, SettingsKeys.AutoOff, 70),
@@ -257,7 +289,8 @@ public static class SettingsFormStateFactory
             cool.MaximumProcessorState,
             cool.LimitBoost,
             cool.BoostValue,
-            auto.Enabled,
+            selection,
+            selection == CoolSelection.Auto,
             auto.ActivateCelsius,
             auto.ActivateSeconds,
             auto.DeactivateCelsius,
@@ -290,8 +323,12 @@ public static class SettingsFormStateFactory
             ReadInt(submitted, SettingsKeys.CoolMax, current.CoolMaximum),
             ReadBool(submitted, SettingsKeys.CoolBoost, current.LimitBoost),
             boost);
+        var selectionText = Read(submitted, SettingsKeys.CoolSelection);
+        var selection = string.IsNullOrWhiteSpace(selectionText)
+            ? current.Selection
+            : CoolSelectionCycle.Parse(selectionText, null);
         var auto = AutoCoolOptions.Normalize(
-            ReadBool(submitted, SettingsKeys.Auto, current.AutoEnabled),
+            selection == CoolSelection.Auto,
             ReadInt(submitted, SettingsKeys.AutoOn, current.AutoOnCelsius),
             ReadInt(submitted, SettingsKeys.AutoOnSeconds, current.AutoOnSeconds),
             ReadInt(submitted, SettingsKeys.AutoOff, current.AutoOffCelsius),
@@ -311,7 +348,8 @@ public static class SettingsFormStateFactory
             cool.MaximumProcessorState,
             cool.LimitBoost,
             cool.BoostValue,
-            auto.Enabled,
+            selection,
+            selection == CoolSelection.Auto,
             auto.ActivateCelsius,
             auto.ActivateSeconds,
             auto.DeactivateCelsius,
@@ -321,27 +359,27 @@ public static class SettingsFormStateFactory
 
     private static ColorChoice ReadColor(IReadOnlyDictionary<string, string?> submitted, string colorKey, ColorChoice current)
     {
-        var hasPreset = submitted.ContainsKey(SettingsKeys.Preset(colorKey));
-        var hasCustom = submitted.ContainsKey(SettingsKeys.Custom(colorKey));
-        if (!hasPreset && !hasCustom)
+        if (submitted.ContainsKey(SettingsKeys.Preset(colorKey)))
         {
-            return current;
+            var preset = Read(submitted, SettingsKeys.Preset(colorKey));
+            if (!string.Equals(preset?.Trim(), ColorPresets.CustomId, StringComparison.OrdinalIgnoreCase))
+            {
+                var match = ColorPresets.FindId(preset);
+                if (match is not null)
+                {
+                    return new ColorChoice(match.Id, match.Color.ToHex(), match.Color);
+                }
+            }
         }
 
-        var preset = hasPreset ? Read(submitted, SettingsKeys.Preset(colorKey)) : current.PresetId;
-        if (string.Equals(preset?.Trim(), ColorPresets.CustomId, StringComparison.OrdinalIgnoreCase))
+        if (submitted.ContainsKey(SettingsKeys.Custom(colorKey))
+            && RgbColor.TryParse(Read(submitted, SettingsKeys.Custom(colorKey)), out var parsed)
+            && parsed != current.Color)
         {
-            var hex = hasCustom ? Read(submitted, SettingsKeys.Custom(colorKey)) : current.CustomHex;
-            if (!RgbColor.TryParse(hex, out var parsed))
-            {
-                return current;
-            }
-
             return new ColorChoice(ColorPresets.CustomId, parsed.ToHex(), parsed);
         }
 
-        var match = ColorPresets.FindId(preset);
-        return match is null ? current : new ColorChoice(match.Id, match.Color.ToHex(), match.Color);
+        return current;
     }
 
     private static DeviceFormState CleanSeed(DeviceSettingSeed seed) =>
@@ -398,6 +436,67 @@ public static class SettingsFormStateFactory
     }
 
     private static string? Blank(string? text) => string.IsNullOrWhiteSpace(text) ? null : text;
+
+    private static void NoteNumber(List<string> notices, IReadOnlyDictionary<string, string?> submitted, string key, string label, int min, int max)
+    {
+        if (!submitted.TryGetValue(key, out var text) || string.IsNullOrWhiteSpace(text))
+        {
+            return;
+        }
+
+        if (!int.TryParse(text.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed))
+        {
+            notices.Add(UiText.SettingsNumberIgnored(label));
+            return;
+        }
+
+        if (parsed < min || parsed > max)
+        {
+            notices.Add(UiText.SettingsNumberLimited(label, Math.Clamp(parsed, min, max), min, max));
+        }
+    }
+
+    private static void NoteInvalidHex(List<string> notices, IReadOnlyDictionary<string, string?> submitted, string colorKey, string band)
+    {
+        var key = SettingsKeys.Custom(colorKey);
+        if (!submitted.TryGetValue(key, out var text) || string.IsNullOrWhiteSpace(text) || RgbColor.TryParse(text, out _))
+        {
+            return;
+        }
+
+        notices.Add(UiText.SettingsHexIgnored(band));
+    }
+
+    private static void NoteBands(List<string> notices, IReadOnlyDictionary<string, string?> submitted, SettingsFormState state)
+    {
+        var cool = SubmittedInt(submitted, SettingsKeys.BlueBelow);
+        var warm = SubmittedInt(submitted, SettingsKeys.YellowFrom);
+        var hot = SubmittedInt(submitted, SettingsKeys.OrangeFrom);
+        var critical = SubmittedInt(submitted, SettingsKeys.RedFrom);
+        if (cool is null && warm is null && hot is null && critical is null)
+        {
+            return;
+        }
+
+        var changed = (cool is int coolValue && coolValue != state.BlueBelow)
+            || (warm is int warmValue && warmValue != state.YellowFrom)
+            || (hot is int hotValue && hotValue != state.OrangeFrom)
+            || (critical is int criticalValue && criticalValue != state.RedFrom);
+        if (changed)
+        {
+            notices.Add(UiText.SettingsBandsReordered(state.BlueBelow, state.YellowFrom, state.OrangeFrom, state.RedFrom));
+        }
+    }
+
+    private static int? SubmittedInt(IReadOnlyDictionary<string, string?> submitted, string key)
+    {
+        if (!submitted.TryGetValue(key, out var text) || string.IsNullOrWhiteSpace(text))
+        {
+            return null;
+        }
+
+        return int.TryParse(text.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed) ? parsed : null;
+    }
 
     private static string? Read(IReadOnlyDictionary<string, string?> values, string key) =>
         values.TryGetValue(key, out var text) ? text : null;

@@ -22,6 +22,7 @@ public sealed record MonitorOptions(
     bool ColorDockIcons,
     ColorScale Colors,
     CoolOptions Cool,
+    CoolSelection CoolMode,
     AutoCoolOptions AutoCool,
     PresentationMap Devices)
 {
@@ -33,6 +34,7 @@ public sealed record MonitorOptions(
         true,
         ColorScale.Default,
         CoolOptions.Default,
+        CoolSelection.Off,
         AutoCoolOptions.Default,
         PresentationMap.Empty);
 

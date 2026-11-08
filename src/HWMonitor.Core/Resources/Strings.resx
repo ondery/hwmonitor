@@ -32,10 +32,17 @@
   <data name="StatusServiceTitle" xml:space="preserve"><value>Install sensor service for CPU temperature</value></data>
   <data name="StatusServiceSubtitle" xml:space="preserve"><value>CPU and integrated graphics temperatures need HW Monitor Sensor Service. Usage is still shown.</value></data>
   <data name="ReadingSensors" xml:space="preserve"><value>Reading sensors…</value></data>
-  <data name="CoolOn" xml:space="preserve"><value>Cool ON</value></data>
-  <data name="CoolOff" xml:space="preserve"><value>Cool OFF</value></data>
-  <data name="CoolDockOn" xml:space="preserve"><value>ON</value></data>
-  <data name="CoolDockOff" xml:space="preserve"><value>OFF</value></data>
+  <data name="CoolOn" xml:space="preserve"><value>Cool On</value></data>
+  <data name="CoolOff" xml:space="preserve"><value>Cool Off</value></data>
+  <data name="CoolBadgeAuto" xml:space="preserve"><value>Auto</value></data>
+  <data name="CoolBadgeOn" xml:space="preserve"><value>Cool On</value></data>
+  <data name="CoolBadgeOff" xml:space="preserve"><value>Cool Off</value></data>
+  <data name="CoolDockOn" xml:space="preserve"><value>On</value></data>
+  <data name="CoolDockOff" xml:space="preserve"><value>Off</value></data>
+  <data name="CoolDockAuto" xml:space="preserve"><value>Auto</value></data>
+  <data name="CoolDockEngaged" xml:space="preserve"><value>Cool · on</value></data>
+  <data name="CoolAutoIdleSubtitle" xml:space="preserve"><value>Auto is watching the processor temperature.</value></data>
+  <data name="SettingCoolModeShort" xml:space="preserve"><value>Mode</value></data>
   <data name="CoolDockLabel" xml:space="preserve"><value>Cool</value></data>
   <data name="CoolTitle" xml:space="preserve"><value>Cool Mode</value></data>
   <data name="CoolOnSubtitle" xml:space="preserve"><value>Maximum processor state is limited on the active power scheme.</value></data>
@@ -46,7 +53,7 @@
   <data name="SettingRefreshLabel" xml:space="preserve"><value>Refresh interval (ms)</value></data>
   <data name="SettingRefreshDescription" xml:space="preserve"><value>Applies to the list page and Dock. How often readings refresh. The allowed range is 500 to 3000 milliseconds.</value></data>
   <data name="SettingCompactLabel" xml:space="preserve"><value>Compact sensor list</value></data>
-  <data name="SettingCompactDescription" xml:space="preserve"><value>Applies to the list page. Hides per-core rows unless that row is set to Show.</value></data>
+  <data name="SettingCompactDescription" xml:space="preserve"><value>List. Hides cores on the cores page unless that core is set to Show.</value></data>
   <data name="SettingBlueBelowLabel" xml:space="preserve"><value>Cool below (°C)</value></data>
   <data name="SettingYellowLabel" xml:space="preserve"><value>Warm from (°C)</value></data>
   <data name="SettingOrangeLabel" xml:space="preserve"><value>Hot from (°C)</value></data>
@@ -116,6 +123,41 @@
   <data name="ColorPreset_pink" xml:space="preserve"><value>Pink</value></data>
   <data name="ColorPreset_slate" xml:space="preserve"><value>Slate</value></data>
   <data name="ColorPreset_custom" xml:space="preserve"><value>Custom</value></data>
+  <data name="SettingScopeListDock" xml:space="preserve"><value>List + Dock</value></data>
+  <data name="SettingScopeList" xml:space="preserve"><value>List</value></data>
+  <data name="SettingScopeDock" xml:space="preserve"><value>Dock</value></data>
+  <data name="SettingScopeCool" xml:space="preserve"><value>Cool Mode</value></data>
+  <data name="SettingScopeAuto" xml:space="preserve"><value>Auto Cool</value></data>
+  <data name="SettingRefreshShort" xml:space="preserve"><value>Refresh ms</value></data>
+  <data name="SettingCompactShort" xml:space="preserve"><value>Compact</value></data>
+  <data name="SettingDockColorShort" xml:space="preserve"><value>Dock colors</value></data>
+  <data name="SettingCoolMaxShort" xml:space="preserve"><value>Cap %</value></data>
+  <data name="SettingCoolBoostShort" xml:space="preserve"><value>Limit boost</value></data>
+  <data name="SettingBoostShort" xml:space="preserve"><value>Boost</value></data>
+  <data name="SettingAutoShort" xml:space="preserve"><value>Auto</value></data>
+  <data name="SettingAutoOnShort" xml:space="preserve"><value>On °C</value></data>
+  <data name="SettingAutoOnSecondsShort" xml:space="preserve"><value>On s</value></data>
+  <data name="SettingAutoOffShort" xml:space="preserve"><value>Off °C</value></data>
+  <data name="SettingAutoOffSecondsShort" xml:space="preserve"><value>Off s</value></data>
+  <data name="SettingDeviceShortShort" xml:space="preserve"><value>Short</value></data>
+  <data name="SettingDeviceFullShort" xml:space="preserve"><value>Full name</value></data>
+  <data name="SettingDeviceListShort" xml:space="preserve"><value>List</value></data>
+  <data name="SettingDeviceDockShort" xml:space="preserve"><value>Dock</value></data>
+  <data name="SettingAdvanced" xml:space="preserve"><value>Advanced</value></data>
+  <data name="SettingAdvancedHelp" xml:space="preserve"><value>Custom hex. List + Dock. Used when it differs from the selected swatch.</value></data>
+  <data name="SettingOpen" xml:space="preserve"><value>Open</value></data>
+  <data name="SettingCoresCount" xml:space="preserve"><value>{0} cores</value></data>
+  <data name="CoresCommand" xml:space="preserve"><value>Cores</value></data>
+  <data name="CoresPageTitle" xml:space="preserve"><value>{0} cores</value></data>
+  <data name="CoresEmptyTitle" xml:space="preserve"><value>No cores shown</value></data>
+  <data name="CoresEmptySubtitle" xml:space="preserve"><value>Compact mode hides cores unless a core is set to Show.</value></data>
+  <data name="SettingsSaved" xml:space="preserve"><value>Saved. The list and Dock use these values now.</value></data>
+  <data name="SettingsEmpty" xml:space="preserve"><value>Settings could not be read. Nothing was changed.</value></data>
+  <data name="SettingsNumberIgnored" xml:space="preserve"><value>{0} was not a whole number, so it was left unchanged.</value></data>
+  <data name="SettingsNumberLimited" xml:space="preserve"><value>{0} was limited to {1}. Allowed range is {2} to {3}.</value></data>
+  <data name="SettingsHexIgnored" xml:space="preserve"><value>{0} custom hex was not a color, so the previous color was kept.</value></data>
+  <data name="SettingsBandsReordered" xml:space="preserve"><value>Temperature bands were kept in order: Cool below {0}, Warm from {1}, Hot from {2}, Critical from {3}.</value></data>
+  <data name="SettingsAutoOffLowered" xml:space="preserve"><value>Auto Cool off was lowered to {0} so it stays below the on temperature.</value></data>
   <data name="VisibilityDefault" xml:space="preserve"><value>Default</value></data>
   <data name="VisibilityShow" xml:space="preserve"><value>Show</value></data>
   <data name="VisibilityHide" xml:space="preserve"><value>Hide</value></data>

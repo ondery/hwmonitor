@@ -1,6 +1,7 @@
 // Copyright (c) 2026 Ondery
 // SPDX-License-Identifier: MIT
 
+using System.Globalization;
 using System.Text.Json.Nodes;
 using HWMonitor.Core.Colors;
 using HWMonitor.Core.Power;
@@ -11,15 +12,27 @@ namespace HWMonitor.Core.Options;
 
 public static class SettingsCard
 {
-    public static string Build(SettingsFormState state)
+    public static string Build(SettingsFormState state) => Build(state, null, false);
+
+    public static string Build(SettingsFormState state, string? notice, bool warning)
     {
-        var body = new JsonArray
+        var body = new JsonArray();
+        if (!string.IsNullOrWhiteSpace(notice))
         {
-            Group(UiText.SettingGroupGeneral, UiText.SettingGroupGeneralHelp, false, General(state)),
-            Group(UiText.SettingGroupColors, UiText.SettingGroupColorsHelp, true, Colors(state)),
-            Group(UiText.SettingGroupCool, UiText.SettingGroupCoolHelp, true, Cool(state)),
-            Group(UiText.SettingGroupDevices, UiText.SettingGroupDevicesHelp, true, Devices(state)),
-        };
+            body.Add(new JsonObject
+            {
+                ["type"] = "TextBlock",
+                ["text"] = notice,
+                ["wrap"] = true,
+                ["weight"] = "Bolder",
+                ["color"] = warning ? "Warning" : "Good",
+            });
+        }
+
+        AddFold(body, "fold-general", UiText.SettingGroupGeneral, UiText.SettingScopeListDock, General(state));
+        AddFold(body, "fold-colors", UiText.SettingGroupColors, UiText.SettingScopeListDock, Colors(state));
+        AddFold(body, "fold-cool", UiText.SettingGroupCool, UiText.SettingScopeCool, Cool(state));
+        AddFold(body, "fold-devices", UiText.SettingGroupDevices, UiText.SettingGroupDevicesHelp, Devices(state));
         var card = new JsonObject
         {
             ["$schema"] = "http://adaptivecards.io/schemas/adaptive-card.json",
@@ -38,49 +51,70 @@ public static class SettingsCard
         return card.ToJsonString();
     }
 
-    private static List<JsonNode> General(SettingsFormState state)
-    {
-        var items = new List<JsonNode>();
-        Add(items, Number(SettingsKeys.Refresh, UiText.SettingRefreshLabel, state.RefreshIntervalMs, 500, 3000), UiText.SettingRefreshDescription);
-        Add(items, Toggle(SettingsKeys.Compact, UiText.SettingCompactLabel, state.Compact), UiText.SettingCompactDescription);
-        Add(items, Toggle(SettingsKeys.DockColorIcons, UiText.SettingDockColorLabel, state.ColorDockIcons), UiText.SettingDockColorDescription);
-        return items;
-    }
+    private static List<JsonNode> General(SettingsFormState state) =>
+    [
+        Columns(
+            NumberColumn(SettingsKeys.Refresh, UiText.SettingRefreshShort, UiText.SettingScopeListDock, state.RefreshIntervalMs, 500, 3000),
+            ToggleColumn(SettingsKeys.Compact, UiText.SettingCompactShort, UiText.SettingScopeList, state.Compact),
+            ToggleColumn(SettingsKeys.DockColorIcons, UiText.SettingDockColorShort, UiText.SettingScopeDock, state.ColorDockIcons)),
+    ];
 
     private static List<JsonNode> Colors(SettingsFormState state)
     {
-        var items = new List<JsonNode>();
-        Add(items, Number(SettingsKeys.BlueBelow, UiText.SettingBlueBelowLabel, state.BlueBelow, 0, 120), UiText.SettingThresholdDescription);
-        Add(items, Number(SettingsKeys.YellowFrom, UiText.SettingYellowLabel, state.YellowFrom, 0, 120), UiText.SettingThresholdDescription);
-        Add(items, Number(SettingsKeys.OrangeFrom, UiText.SettingOrangeLabel, state.OrangeFrom, 1, 124), UiText.SettingThresholdDescription);
-        Add(items, Number(SettingsKeys.RedFrom, UiText.SettingRedLabel, state.RedFrom, 2, 125), UiText.SettingThresholdDescription);
-        AddColor(items, UiText.SettingBlueColorLabel, UiText.TagBlue, SettingsKeys.Blue, state.Blue);
-        AddColor(items, UiText.SettingYellowColorLabel, UiText.TagYellow, SettingsKeys.Yellow, state.Yellow);
-        AddColor(items, UiText.SettingOrangeColorLabel, UiText.TagOrange, SettingsKeys.Orange, state.Orange);
-        AddColor(items, UiText.SettingRedColorLabel, UiText.TagRed, SettingsKeys.Red, state.Red);
+        var items = new List<JsonNode>
+        {
+            Columns(
+                NumberColumn(SettingsKeys.BlueBelow, UiText.TagBlue, UiText.SettingScopeListDock, state.BlueBelow, 0, 120),
+                NumberColumn(SettingsKeys.YellowFrom, UiText.TagYellow, UiText.SettingScopeListDock, state.YellowFrom, 0, 120),
+                NumberColumn(SettingsKeys.OrangeFrom, UiText.TagOrange, UiText.SettingScopeListDock, state.OrangeFrom, 1, 124),
+                NumberColumn(SettingsKeys.RedFrom, UiText.TagRed, UiText.SettingScopeListDock, state.RedFrom, 2, 125)),
+        };
+        AddBand(items, UiText.TagBlue, SettingsKeys.Blue, state.Blue);
+        AddBand(items, UiText.TagYellow, SettingsKeys.Yellow, state.Yellow);
+        AddBand(items, UiText.TagOrange, SettingsKeys.Orange, state.Orange);
+        AddBand(items, UiText.TagRed, SettingsKeys.Red, state.Red);
+        items.Add(Header("fold-advanced", UiText.SettingAdvanced, UiText.SettingAdvancedHelp));
+        items.Add(Body("fold-advanced",
+        [
+            Columns(
+                TextColumn(SettingsKeys.Custom(SettingsKeys.Blue), UiText.CustomHexLabel(UiText.TagBlue), UiText.SettingScopeListDock, state.Blue.CustomHex, UiText.SettingCustomHexPlaceholder),
+                TextColumn(SettingsKeys.Custom(SettingsKeys.Yellow), UiText.CustomHexLabel(UiText.TagYellow), UiText.SettingScopeListDock, state.Yellow.CustomHex, UiText.SettingCustomHexPlaceholder),
+                TextColumn(SettingsKeys.Custom(SettingsKeys.Orange), UiText.CustomHexLabel(UiText.TagOrange), UiText.SettingScopeListDock, state.Orange.CustomHex, UiText.SettingCustomHexPlaceholder),
+                TextColumn(SettingsKeys.Custom(SettingsKeys.Red), UiText.CustomHexLabel(UiText.TagRed), UiText.SettingScopeListDock, state.Red.CustomHex, UiText.SettingCustomHexPlaceholder)),
+        ]));
         return items;
     }
 
-    private static List<JsonNode> Cool(SettingsFormState state)
-    {
-        var items = new List<JsonNode>();
-        Add(items, Number(SettingsKeys.CoolMax, UiText.SettingCoolMaxLabel, state.CoolMaximum, 1, 100), UiText.SettingCoolMaxDescription);
-        Add(items, Toggle(SettingsKeys.CoolBoost, UiText.SettingCoolBoostLabel, state.LimitBoost), UiText.SettingCoolBoostDescription);
-        Add(items, Choice(
-            SettingsKeys.BoostMode,
-            UiText.SettingBoostChoiceLabel,
-            state.BoostValue == PowerGuids.BoostEfficient ? "3" : "0",
-            [
-                new(UiText.SettingBoostDisabled, "0"),
-                new(UiText.SettingBoostEfficient, "3"),
-            ]), UiText.SettingBoostChoiceDescription);
-        Add(items, Toggle(SettingsKeys.Auto, UiText.SettingAutoLabel, state.AutoEnabled), UiText.SettingAutoDescription);
-        Add(items, Number(SettingsKeys.AutoOn, UiText.SettingAutoOnLabel, state.AutoOnCelsius, 1, 125), UiText.SettingAutoOnDescription);
-        Add(items, Number(SettingsKeys.AutoOnSeconds, UiText.SettingAutoOnSecondsLabel, state.AutoOnSeconds, 1, 600), UiText.SettingAutoOnSecondsDescription);
-        Add(items, Number(SettingsKeys.AutoOff, UiText.SettingAutoOffLabel, state.AutoOffCelsius, 0, 124), UiText.SettingAutoOffDescription);
-        Add(items, Number(SettingsKeys.AutoOffSeconds, UiText.SettingAutoOffSecondsLabel, state.AutoOffSeconds, 1, 600), UiText.SettingAutoOffSecondsDescription);
-        return items;
-    }
+    private static List<JsonNode> Cool(SettingsFormState state) =>
+    [
+        Columns(
+            NumberColumn(SettingsKeys.CoolMax, UiText.SettingCoolMaxShort, UiText.SettingScopeCool, state.CoolMaximum, 1, 100),
+            ToggleColumn(SettingsKeys.CoolBoost, UiText.SettingCoolBoostShort, UiText.SettingScopeCool, state.LimitBoost),
+            ChoiceColumn(
+                SettingsKeys.BoostMode,
+                UiText.SettingBoostShort,
+                UiText.SettingScopeCool,
+                state.BoostValue == PowerGuids.BoostEfficient ? "3" : "0",
+                [
+                    (UiText.SettingBoostDisabled, "0"),
+                    (UiText.SettingBoostEfficient, "3"),
+                ])),
+        Columns(
+            ChoiceColumn(
+                SettingsKeys.CoolSelection,
+                UiText.SettingCoolModeShort,
+                UiText.SettingScopeListDock,
+                CoolSelectionCycle.Token(state.Selection),
+                [
+                    (UiText.CoolBadgeAuto, "auto"),
+                    (UiText.CoolBadgeOn, "on"),
+                    (UiText.CoolBadgeOff, "off"),
+                ]),
+            NumberColumn(SettingsKeys.AutoOn, UiText.SettingAutoOnShort, UiText.SettingScopeAuto, state.AutoOnCelsius, 1, 125),
+            NumberColumn(SettingsKeys.AutoOnSeconds, UiText.SettingAutoOnSecondsShort, UiText.SettingScopeAuto, state.AutoOnSeconds, 1, 600),
+            NumberColumn(SettingsKeys.AutoOff, UiText.SettingAutoOffShort, UiText.SettingScopeAuto, state.AutoOffCelsius, 0, 124),
+            NumberColumn(SettingsKeys.AutoOffSeconds, UiText.SettingAutoOffSecondsShort, UiText.SettingScopeAuto, state.AutoOffSeconds, 1, 600)),
+    ];
 
     private static List<JsonNode> Devices(SettingsFormState state)
     {
@@ -91,149 +125,284 @@ public static class SettingsCard
             return items;
         }
 
-        foreach (var device in state.Devices)
+        var packages = state.Devices.Where(device => device.Id.StartsWith("cpu:", StringComparison.Ordinal) && !DeviceIds.IsCore(device.Id)).ToArray();
+        var cores = state.Devices.Where(device => DeviceIds.IsCore(device.Id)).ToArray();
+        var adapters = state.Devices.Where(device => !device.Id.StartsWith("cpu:", StringComparison.Ordinal)).ToArray();
+        var owned = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var package in packages)
         {
-            var fields = new JsonArray
+            items.Add(Caption(package.DefaultShort, UiText.DeviceHardwareId(package.Id)));
+            items.Add(DeviceRow(package));
+            var children = cores.Where(core => string.Equals(DeviceIds.PackageId(core.Id), package.Id, StringComparison.Ordinal)).ToArray();
+            foreach (var child in children)
             {
-                new JsonObject
-                {
-                    ["type"] = "TextBlock",
-                    ["text"] = device.DefaultShort,
-                    ["weight"] = "Bolder",
-                    ["wrap"] = true,
-                    ["spacing"] = "Medium",
-                },
-                Hint(UiText.DeviceHardwareId(device.Id)),
-            };
-            foreach (var node in DeviceFields(device))
-            {
-                fields.Add(node);
+                owned.Add(child.Id);
             }
 
-            items.Add(new JsonObject
+            if (children.Length == 0)
             {
-                ["type"] = "Container",
-                ["spacing"] = "Medium",
-                ["items"] = fields,
-            });
+                continue;
+            }
+
+            var fold = SettingsKeys.CoresFold(package.Id);
+            items.Add(Header(fold, string.Format(CultureInfo.CurrentCulture, UiText.SettingCoresCount, children.Length), UiText.SettingScopeListDock));
+            items.Add(Body(fold, children.SelectMany(core => new JsonNode[] { Caption(core.DefaultShort, UiText.DeviceHardwareId(core.Id)), DeviceRow(core) }).ToList()));
         }
 
-        return items;
-    }
-
-    private static List<JsonNode> DeviceFields(DeviceFormState device)
-    {
-        var items = new List<JsonNode>();
-        Add(items, Text(SettingsKeys.Device(device.Id, "short"), UiText.DeviceShortLabel(device.DefaultShort), device.ShortLabel, device.DefaultShort), UiText.DeviceShortDescription(device.Id));
-        Add(items, Text(SettingsKeys.Device(device.Id, "full"), UiText.DeviceFullLabel(device.DefaultShort), device.FullName, device.DefaultFull), UiText.DeviceFullDescription);
-        Add(items, Choice(SettingsKeys.Device(device.Id, "list"), UiText.DeviceListLabel(device.DefaultShort), PresentationMap.VisibilityToken(device.List), VisibilityChoices()), UiText.SettingDeviceListDescription);
-        Add(items, Choice(SettingsKeys.Device(device.Id, "dock"), UiText.DeviceDockLabel(device.DefaultShort), PresentationMap.VisibilityToken(device.Dock), VisibilityChoices()), UiText.SettingDeviceDockDescription);
-        return items;
-    }
-
-    private static void AddColor(List<JsonNode> items, string label, string band, string key, ColorChoice choice)
-    {
-        var choices = new List<(string Title, string Value)>();
-        foreach (var preset in ColorPresets.Palette)
+        var loose = cores.Where(core => !owned.Contains(core.Id)).ToArray();
+        if (loose.Length > 0)
         {
-            choices.Add((UiText.ColorPreset(preset.Id), preset.Id));
+            items.Add(Header("fold-loose-cores", UiText.CoresCommand, UiText.SettingScopeListDock));
+            items.Add(Body("fold-loose-cores", loose.SelectMany(core => new JsonNode[] { Caption(core.DefaultShort, UiText.DeviceHardwareId(core.Id)), DeviceRow(core) }).ToList()));
         }
 
-        choices.Add((UiText.ColorPreset(ColorPresets.CustomId), ColorPresets.CustomId));
-        Add(items, Choice(SettingsKeys.Preset(key), label, choice.PresetId, choices), UiText.SettingColorDescription);
-        Add(items, Text(SettingsKeys.Custom(key), UiText.CustomHexLabel(band), choice.CustomHex, UiText.SettingCustomHexPlaceholder), UiText.SettingCustomHexDescription);
+        foreach (var adapter in adapters)
+        {
+            items.Add(Caption(adapter.DefaultShort, UiText.DeviceHardwareId(adapter.Id)));
+            items.Add(DeviceRow(adapter));
+        }
+
+        return items;
     }
 
-    private static List<(string Title, string Value)> VisibilityChoices() =>
-    [
-        (UiText.VisibilityDefault, "default"),
-        (UiText.VisibilityShow, "show"),
-        (UiText.VisibilityHide, "hide"),
-    ];
-
-    private static void Add(List<JsonNode> items, JsonObject input, string help)
+    private static void AddBand(List<JsonNode> items, string name, string key, ColorChoice choice)
     {
-        items.Add(input);
-        items.Add(Hint(help));
+        items.Add(new JsonObject
+        {
+            ["type"] = "ColumnSet",
+            ["spacing"] = "Small",
+            ["columns"] = new JsonArray
+            {
+                Column("auto",
+                [
+                    new JsonObject
+                    {
+                        ["type"] = "Image",
+                        ["url"] = ColorSwatches.DataUri(choice.Color, true),
+                        ["size"] = "Small",
+                        ["altText"] = choice.Color.ToHex(),
+                    },
+                ]),
+                Column("stretch",
+                [
+                    new JsonObject
+                    {
+                        ["type"] = "TextBlock",
+                        ["text"] = name,
+                        ["weight"] = "Bolder",
+                        ["size"] = "Small",
+                        ["wrap"] = true,
+                    },
+                    Hint(choice.Color.ToHex() + " · " + UiText.SettingScopeListDock),
+                ]),
+            },
+        });
+        items.Add(SwatchRow(ColorPresets.Palette.Take(7), choice, key));
+        items.Add(SwatchRow(ColorPresets.Palette.Skip(7), choice, key));
     }
 
-    private static JsonObject Group(string title, string help, bool separate, List<JsonNode> children)
+    private static JsonObject SwatchRow(IEnumerable<NamedColor> colors, ColorChoice choice, string key)
     {
-        var items = new JsonArray
+        var columns = new JsonArray();
+        foreach (var preset in colors)
+        {
+            var selected = string.Equals(choice.PresetId, preset.Id, StringComparison.Ordinal);
+            columns.Add(Column("auto",
+            [
+                new JsonObject
+                {
+                    ["type"] = "Image",
+                    ["url"] = ColorSwatches.DataUri(preset.Color, selected),
+                    ["size"] = "Medium",
+                    ["altText"] = UiText.ColorPreset(preset.Id),
+                    ["selectAction"] = new JsonObject
+                    {
+                        ["type"] = "Action.Submit",
+                        ["title"] = UiText.ColorPreset(preset.Id),
+                        ["data"] = new JsonObject
+                        {
+                            [SettingsKeys.Pick] = "color",
+                            [SettingsKeys.Preset(key)] = preset.Id,
+                        },
+                    },
+                },
+            ]));
+        }
+
+        return new JsonObject
+        {
+            ["type"] = "ColumnSet",
+            ["spacing"] = "None",
+            ["columns"] = columns,
+        };
+    }
+
+    private static JsonObject DeviceRow(DeviceFormState device) =>
+        Columns(
+            TextColumn(SettingsKeys.Device(device.Id, "short"), UiText.SettingDeviceShortShort, UiText.SettingScopeListDock, device.ShortLabel, device.DefaultShort),
+            TextColumn(SettingsKeys.Device(device.Id, "full"), UiText.SettingDeviceFullShort, UiText.SettingScopeList, device.FullName, device.DefaultFull),
+            ChoiceColumn(
+                SettingsKeys.Device(device.Id, "list"),
+                UiText.SettingDeviceListShort,
+                UiText.SettingScopeList,
+                PresentationMap.VisibilityToken(device.List),
+                Visibility()),
+            ChoiceColumn(
+                SettingsKeys.Device(device.Id, "dock"),
+                UiText.SettingDeviceDockShort,
+                UiText.SettingScopeDock,
+                PresentationMap.VisibilityToken(device.Dock),
+                Visibility()));
+
+    private static void AddFold(JsonArray body, string id, string title, string scope, List<JsonNode> children)
+    {
+        body.Add(Header(id, title, scope));
+        body.Add(Body(id, children));
+    }
+
+    private static JsonObject Header(string id, string title, string scope) => new()
+    {
+        ["type"] = "Container",
+        ["spacing"] = "Small",
+        ["selectAction"] = new JsonObject
+        {
+            ["type"] = "Action.ToggleVisibility",
+            ["title"] = title,
+            ["targetElements"] = new JsonArray { id },
+        },
+        ["items"] = new JsonArray
         {
             new JsonObject
             {
-                ["type"] = "TextBlock",
-                ["text"] = title,
-                ["weight"] = "Bolder",
-                ["size"] = "Medium",
-                ["wrap"] = true,
+                ["type"] = "ColumnSet",
+                ["columns"] = new JsonArray
+                {
+                    Column("stretch",
+                    [
+                        new JsonObject
+                        {
+                            ["type"] = "TextBlock",
+                            ["text"] = title,
+                            ["weight"] = "Bolder",
+                            ["wrap"] = true,
+                        },
+                        Hint(scope),
+                    ]),
+                    Column("auto",
+                    [
+                        new JsonObject
+                        {
+                            ["type"] = "TextBlock",
+                            ["text"] = UiText.SettingOpen,
+                            ["size"] = "Small",
+                            ["isSubtle"] = true,
+                        },
+                    ]),
+                },
             },
-            Hint(help),
-        };
+        },
+    };
+
+    private static JsonObject Body(string id, List<JsonNode> children)
+    {
+        var items = new JsonArray();
         foreach (var child in children)
         {
             items.Add(child);
         }
 
-        var container = new JsonObject
+        return new JsonObject
         {
             ["type"] = "Container",
-            ["spacing"] = "Large",
+            ["id"] = id,
+            ["isVisible"] = false,
+            ["spacing"] = "None",
             ["items"] = items,
         };
-        if (separate)
-        {
-            container["separator"] = true;
-        }
-
-        return container;
     }
 
-    private static JsonObject Hint(string text) => new()
+    private static JsonObject Columns(params JsonObject[] columns)
     {
-        ["type"] = "TextBlock",
-        ["text"] = text,
-        ["wrap"] = true,
-        ["size"] = "Small",
-        ["isSubtle"] = true,
-        ["spacing"] = "None",
-    };
+        var items = new JsonArray();
+        foreach (var column in columns)
+        {
+            items.Add(column);
+        }
 
-    private static JsonObject Number(string id, string label, int value, int min, int max) => new()
+        return new JsonObject
+        {
+            ["type"] = "ColumnSet",
+            ["spacing"] = "Small",
+            ["columns"] = items,
+        };
+    }
+
+    private static JsonObject Column(string width, IReadOnlyList<JsonNode> items)
     {
-        ["type"] = "Input.Number",
-        ["id"] = id,
-        ["label"] = label,
-        ["value"] = value,
-        ["min"] = min,
-        ["max"] = max,
-        ["spacing"] = "Medium",
-    };
+        var body = new JsonArray();
+        foreach (var item in items)
+        {
+            body.Add(item);
+        }
 
-    private static JsonObject Toggle(string id, string label, bool value) => new()
-    {
-        ["type"] = "Input.Toggle",
-        ["id"] = id,
-        ["label"] = label,
-        ["title"] = " ",
-        ["value"] = value ? "true" : "false",
-        ["valueOn"] = "true",
-        ["valueOff"] = "false",
-        ["spacing"] = "Small",
-    };
+        return new JsonObject
+        {
+            ["type"] = "Column",
+            ["width"] = width,
+            ["spacing"] = "Small",
+            ["items"] = body,
+        };
+    }
 
-    private static JsonObject Text(string id, string label, string value, string placeholder) => new()
-    {
-        ["type"] = "Input.Text",
-        ["id"] = id,
-        ["label"] = label,
-        ["value"] = value,
-        ["placeholder"] = placeholder,
-        ["spacing"] = "Medium",
-    };
+    private static JsonObject NumberColumn(string id, string label, string scope, int value, int min, int max) =>
+        Column("stretch",
+        [
+            Label(label),
+            Hint(scope),
+            new JsonObject
+            {
+                ["type"] = "Input.Number",
+                ["id"] = id,
+                ["value"] = value,
+                ["min"] = min,
+                ["max"] = max,
+                ["spacing"] = "None",
+            },
+        ]);
 
-    private static JsonObject Choice(string id, string label, string value, IReadOnlyList<(string Title, string Value)> choices)
+    private static JsonObject ToggleColumn(string id, string label, string scope, bool value) =>
+        Column("stretch",
+        [
+            Label(label),
+            Hint(scope),
+            new JsonObject
+            {
+                ["type"] = "Input.Toggle",
+                ["id"] = id,
+                ["title"] = " ",
+                ["value"] = value ? "true" : "false",
+                ["valueOn"] = "true",
+                ["valueOff"] = "false",
+                ["spacing"] = "None",
+            },
+        ]);
+
+    private static JsonObject TextColumn(string id, string label, string scope, string value, string? placeholder = null) =>
+        Column("stretch",
+        [
+            Label(label),
+            Hint(scope),
+            new JsonObject
+            {
+                ["type"] = "Input.Text",
+                ["id"] = id,
+                ["value"] = value,
+                ["placeholder"] = placeholder ?? string.Empty,
+                ["spacing"] = "None",
+            },
+        ]);
+
+    private static JsonObject ChoiceColumn(string id, string label, string scope, string value, IReadOnlyList<(string Title, string Value)> choices)
     {
         var nodes = new JsonArray();
         foreach (var choice in choices)
@@ -245,15 +414,56 @@ public static class SettingsCard
             });
         }
 
-        return new JsonObject
-        {
-            ["type"] = "Input.ChoiceSet",
-            ["id"] = id,
-            ["label"] = label,
-            ["style"] = "compact",
-            ["value"] = value,
-            ["choices"] = nodes,
-            ["spacing"] = "Medium",
-        };
+        return Column("stretch",
+        [
+            Label(label),
+            Hint(scope),
+            new JsonObject
+            {
+                ["type"] = "Input.ChoiceSet",
+                ["id"] = id,
+                ["style"] = "compact",
+                ["value"] = value,
+                ["spacing"] = "None",
+                ["choices"] = nodes,
+            },
+        ]);
     }
+
+    private static List<(string Title, string Value)> Visibility() =>
+    [
+        (UiText.VisibilityDefault, "default"),
+        (UiText.VisibilityShow, "show"),
+        (UiText.VisibilityHide, "hide"),
+    ];
+
+    private static JsonObject Caption(string title, string scope) => new()
+    {
+        ["type"] = "TextBlock",
+        ["text"] = title + " · " + scope,
+        ["weight"] = "Bolder",
+        ["size"] = "Small",
+        ["wrap"] = true,
+        ["spacing"] = "Small",
+    };
+
+    private static JsonObject Label(string text) => new()
+    {
+        ["type"] = "TextBlock",
+        ["text"] = text,
+        ["size"] = "Small",
+        ["weight"] = "Bolder",
+        ["wrap"] = true,
+        ["spacing"] = "None",
+    };
+
+    private static JsonObject Hint(string text) => new()
+    {
+        ["type"] = "TextBlock",
+        ["text"] = text,
+        ["size"] = "Small",
+        ["isSubtle"] = true,
+        ["wrap"] = true,
+        ["spacing"] = "None",
+    };
 }

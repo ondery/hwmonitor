@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 using HWMonitor.Core.Colors;
+using HWMonitor.Core.Power;
 
 namespace HWMonitor.Core.Sensors;
 
@@ -19,6 +20,8 @@ public static class SensorIcons
 
     private const string CoolOffSvg = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"{{AccentColor}}\" stroke-width=\"2.4\" stroke-linecap=\"round\"><circle cx=\"12\" cy=\"12\" r=\"7.5\"/><path d=\"M8 16.5L16 7.5\"/></svg>";
 
+    private const string CoolAutoSvg = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"{{AccentColor}}\" stroke-width=\"2.4\"><circle cx=\"12\" cy=\"12\" r=\"7.5\"/><circle cx=\"12\" cy=\"12\" r=\"2.2\" fill=\"{{AccentColor}}\" stroke=\"none\"/></svg>";
+
     public static string? Temperature(DeviceKind kind, RgbColor? color, bool enabled)
     {
         if (!enabled || color is null)
@@ -29,8 +32,12 @@ public static class SensorIcons
         return Tint(color.Value, kind == DeviceKind.Cpu ? CpuSvg : GpuSvg);
     }
 
-    public static string Cool(bool on, RgbColor onColor) =>
-        Tint(on ? onColor : ColorPresets.OffGray, on ? CoolOnSvg : CoolOffSvg);
+    public static string Cool(CoolSelection selection, bool engaged, RgbColor onColor) => selection switch
+    {
+        CoolSelection.On => Tint(onColor, CoolOnSvg),
+        CoolSelection.Off => Tint(ColorPresets.OffGray, CoolOffSvg),
+        _ => Tint(engaged ? onColor : StatusBadges.AutoColor, engaged ? CoolOnSvg : CoolAutoSvg),
+    };
 
     private static string Tint(RgbColor color, string svg) => ThemedPrefix + color.ToHex() + "|" + svg;
 }

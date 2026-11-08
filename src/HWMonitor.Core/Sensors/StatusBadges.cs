@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 using HWMonitor.Core.Colors;
+using HWMonitor.Core.Power;
 using HWMonitor.Core.Text;
 
 namespace HWMonitor.Core.Sensors;
@@ -27,6 +28,12 @@ public static class StatusBadges
         return text is null ? null : StatusBadge.Create(text, color);
     }
 
-    public static StatusBadge ForCool(bool on, RgbColor onColor) =>
-        StatusBadge.Create(on ? UiText.CoolOn : UiText.CoolOff, on ? onColor : ColorPresets.OffGray);
+    public static RgbColor AutoColor { get; } = new(0x14, 0xB8, 0xA6);
+
+    public static StatusBadge ForCool(CoolSelection selection, RgbColor onColor) => selection switch
+    {
+        CoolSelection.On => StatusBadge.Create(UiText.CoolBadgeOn, onColor),
+        CoolSelection.Off => StatusBadge.Create(UiText.CoolBadgeOff, ColorPresets.OffGray),
+        _ => StatusBadge.Create(UiText.CoolBadgeAuto, AutoColor),
+    };
 }

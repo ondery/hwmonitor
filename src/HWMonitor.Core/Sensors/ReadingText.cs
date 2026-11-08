@@ -84,6 +84,13 @@ public static class SensorIds
 
         return "com.ondery.hwmonitor.sensor." + builder;
     }
+
+    public static string ToCoresPageId(string readingId)
+    {
+        var command = ToCommandId(readingId);
+        const string prefix = "com.ondery.hwmonitor.sensor.";
+        return "com.ondery.hwmonitor.cores." + command[prefix.Length..];
+    }
 }
 
 public static class DockProperties

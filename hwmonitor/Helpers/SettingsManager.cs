@@ -25,6 +25,7 @@ internal sealed partial class SettingsManager : JsonSettingsManager
     private readonly TextSetting _yellow = Text(SettingsKeys.Yellow, UiText.SettingYellowColorLabel, UiText.SettingColorDescription, RgbColor.Yellow.ToHex());
     private readonly TextSetting _orange = Text(SettingsKeys.Orange, UiText.SettingOrangeColorLabel, UiText.SettingColorDescription, RgbColor.Orange.ToHex());
     private readonly TextSetting _red = Text(SettingsKeys.Red, UiText.SettingRedColorLabel, UiText.SettingColorDescription, RgbColor.Red.ToHex());
+    private readonly TextSetting _coolSelection = Text(SettingsKeys.CoolSelection, UiText.SettingCoolModeShort, UiText.SettingScopeListDock, string.Empty);
     private readonly TextSetting _coolMax = Text(SettingsKeys.CoolMax, UiText.SettingCoolMaxLabel, UiText.SettingCoolMaxDescription, "99");
     private readonly ToggleSetting _limitBoost = Toggle(SettingsKeys.CoolBoost, UiText.SettingCoolBoostLabel, UiText.SettingCoolBoostDescription, true);
     private readonly ChoiceSetSetting _boostMode;
@@ -114,15 +115,31 @@ internal sealed partial class SettingsManager : JsonSettingsManager
 
     public string SettingsDirectory => Path.GetDirectoryName(FilePath) ?? Path.GetTempPath();
 
-    public void ApplySubmission(IReadOnlyDictionary<string, string?> submitted)
+    public SettingsApplyResult ApplySubmission(IReadOnlyDictionary<string, string?> submitted)
     {
+        SettingsApplyResult result;
         lock (_gate)
         {
-            var next = SettingsFormStateFactory.FromSubmission(submitted, Capture());
-            Write(next);
+            result = SettingsFormStateFactory.Apply(submitted, Capture());
+            Write(result.State);
             ApplyParsed();
             SaveSettings();
             WriteSidecar();
+        }
+
+        Changed?.Invoke(this, EventArgs.Empty);
+        return result;
+    }
+
+    public void CycleCoolMode()
+    {
+        lock (_gate)
+        {
+            var next = CoolSelectionCycle.Next(_current.CoolMode);
+            _coolSelection.Value = CoolSelectionCycle.Token(next);
+            _auto.Value = next == CoolSelection.Auto;
+            ApplyParsed();
+            SaveSettings();
         }
 
         Changed?.Invoke(this, EventArgs.Empty);
@@ -182,6 +199,7 @@ internal sealed partial class SettingsManager : JsonSettingsManager
         _yellow.Value = stored[SettingsKeys.Yellow];
         _orange.Value = stored[SettingsKeys.Orange];
         _red.Value = stored[SettingsKeys.Red];
+        _coolSelection.Value = stored[SettingsKeys.CoolSelection];
         _coolMax.Value = stored[SettingsKeys.CoolMax];
         _limitBoost.Value = state.LimitBoost;
         _boostMode.Value = stored[SettingsKeys.BoostMode];
@@ -231,14 +249,15 @@ internal sealed partial class SettingsManager : JsonSettingsManager
             red.Color);
         var boost = _boostMode.Value == "3" ? PowerGuids.BoostEfficient : PowerGuids.BoostDisabled;
         var cool = CoolOptions.Normalize(MonitorOptions.ParseInt(_coolMax.Value, 99), _limitBoost.Value == true, boost);
+        var selection = CoolSelectionCycle.Parse(_coolSelection.Value, _auto.Value == true);
         var auto = AutoCoolOptions.Normalize(
-            _auto.Value == true,
+            selection == CoolSelection.Auto,
             MonitorOptions.ParseInt(_autoOn.Value, 85),
             MonitorOptions.ParseInt(_autoOnSeconds.Value, 10),
             MonitorOptions.ParseInt(_autoOff.Value, 70),
             MonitorOptions.ParseInt(_autoOffSeconds.Value, 10));
         var refresh = MonitorOptions.ClampRefresh(MonitorOptions.ParseInt(_refresh.Value, MonitorOptions.DefaultRefreshMs));
-        _current = new MonitorOptions(refresh, _compact.Value == true, _dockColors.Value == true, colors, cool, auto, PresentationMap.FromEntries(entries));
+        _current = new MonitorOptions(refresh, _compact.Value == true, _dockColors.Value == true, colors, cool, selection, auto, PresentationMap.FromEntries(entries));
 
         _suppress = true;
         _refresh.Value = refresh.ToString(CultureInfo.InvariantCulture);
@@ -250,6 +269,8 @@ internal sealed partial class SettingsManager : JsonSettingsManager
         _yellow.Value = colors.Yellow.ToHex();
         _orange.Value = colors.Orange.ToHex();
         _red.Value = colors.Red.ToHex();
+        _coolSelection.Value = CoolSelectionCycle.Token(selection);
+        _auto.Value = selection == CoolSelection.Auto;
         _coolMax.Value = cool.MaximumProcessorState.ToString(CultureInfo.InvariantCulture);
         _autoOn.Value = auto.ActivateCelsius.ToString(CultureInfo.InvariantCulture);
         _autoOnSeconds.Value = auto.ActivateSeconds.ToString(CultureInfo.InvariantCulture);
@@ -271,6 +292,7 @@ internal sealed partial class SettingsManager : JsonSettingsManager
         [SettingsKeys.Yellow] = _yellow.Value,
         [SettingsKeys.Orange] = _orange.Value,
         [SettingsKeys.Red] = _red.Value,
+        [SettingsKeys.CoolSelection] = _coolSelection.Value,
         [SettingsKeys.CoolMax] = _coolMax.Value,
         [SettingsKeys.CoolBoost] = _limitBoost.Value == true ? "true" : "false",
         [SettingsKeys.BoostMode] = _boostMode.Value,
@@ -364,6 +386,7 @@ internal sealed partial class SettingsManager : JsonSettingsManager
         yield return _yellow;
         yield return _orange;
         yield return _red;
+        yield return _coolSelection;
         yield return _coolMax;
         yield return _autoOn;
         yield return _autoOnSeconds;
