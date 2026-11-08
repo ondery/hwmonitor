@@ -64,6 +64,20 @@ public static class UiText
 
     public static string ReadingSensors => Get(nameof(ReadingSensors));
 
+    public static string CoolBadgeAuto => Get(nameof(CoolBadgeAuto));
+
+    public static string CoolBadgeOn => Get(nameof(CoolBadgeOn));
+
+    public static string CoolBadgeOff => Get(nameof(CoolBadgeOff));
+
+    public static string CoolDockAuto => Get(nameof(CoolDockAuto));
+
+    public static string CoolDockEngaged => Get(nameof(CoolDockEngaged));
+
+    public static string CoolAutoIdleSubtitle => Get(nameof(CoolAutoIdleSubtitle));
+
+    public static string SettingCoolModeShort => Get(nameof(SettingCoolModeShort));
+
     public static string CoolOn => Get(nameof(CoolOn));
 
     public static string CoolOff => Get(nameof(CoolOff));
@@ -163,6 +177,126 @@ public static class UiText
     public static string DeviceListLabel(string name) => string.Format(CultureInfo.CurrentCulture, Get("SettingDeviceListLabel"), name);
 
     public static string DeviceDockLabel(string name) => string.Format(CultureInfo.CurrentCulture, Get("SettingDeviceDockLabel"), name);
+
+    public static string SettingsPageName => Get(nameof(SettingsPageName));
+
+    public static string SettingsPageTitle => Get(nameof(SettingsPageTitle));
+
+    public static string SettingSave => Get(nameof(SettingSave));
+
+    public static string SettingGroupGeneral => Get(nameof(SettingGroupGeneral));
+
+    public static string SettingGroupGeneralHelp => Get(nameof(SettingGroupGeneralHelp));
+
+    public static string SettingGroupColors => Get(nameof(SettingGroupColors));
+
+    public static string SettingGroupColorsHelp => Get(nameof(SettingGroupColorsHelp));
+
+    public static string SettingGroupCool => Get(nameof(SettingGroupCool));
+
+    public static string SettingGroupCoolHelp => Get(nameof(SettingGroupCoolHelp));
+
+    public static string SettingGroupDevices => Get(nameof(SettingGroupDevices));
+
+    public static string SettingGroupDevicesHelp => Get(nameof(SettingGroupDevicesHelp));
+
+    public static string SettingGroupDevicesEmpty => Get(nameof(SettingGroupDevicesEmpty));
+
+    public static string SettingDockColorLabel => Get(nameof(SettingDockColorLabel));
+
+    public static string SettingDockColorDescription => Get(nameof(SettingDockColorDescription));
+
+    public static string SettingCustomHexDescription => Get(nameof(SettingCustomHexDescription));
+
+    public static string SettingCustomHexPlaceholder => Get(nameof(SettingCustomHexPlaceholder));
+
+    public static string SettingAutoOnDescription => Get(nameof(SettingAutoOnDescription));
+
+    public static string SettingAutoOnSecondsDescription => Get(nameof(SettingAutoOnSecondsDescription));
+
+    public static string SettingAutoOffDescription => Get(nameof(SettingAutoOffDescription));
+
+    public static string SettingAutoOffSecondsDescription => Get(nameof(SettingAutoOffSecondsDescription));
+
+    public static string SettingDeviceListDescription => Get(nameof(SettingDeviceListDescription));
+
+    public static string SettingDeviceDockDescription => Get(nameof(SettingDeviceDockDescription));
+
+    public static string ColorPreset(string id) => Get("ColorPreset_" + id);
+
+    public static string CustomHexLabel(string band) => string.Format(CultureInfo.CurrentCulture, Get("SettingCustomHexLabel"), band);
+
+    public static string DeviceHardwareId(string id) => string.Format(CultureInfo.CurrentCulture, Get("SettingDeviceHardwareId"), id);
+
+    public static string SettingScopeListDock => Get(nameof(SettingScopeListDock));
+
+    public static string SettingScopeList => Get(nameof(SettingScopeList));
+
+    public static string SettingScopeDock => Get(nameof(SettingScopeDock));
+
+    public static string SettingScopeCool => Get(nameof(SettingScopeCool));
+
+    public static string SettingScopeAuto => Get(nameof(SettingScopeAuto));
+
+    public static string SettingRefreshShort => Get(nameof(SettingRefreshShort));
+
+    public static string SettingCompactShort => Get(nameof(SettingCompactShort));
+
+    public static string SettingDockColorShort => Get(nameof(SettingDockColorShort));
+
+    public static string SettingCoolMaxShort => Get(nameof(SettingCoolMaxShort));
+
+    public static string SettingCoolBoostShort => Get(nameof(SettingCoolBoostShort));
+
+    public static string SettingBoostShort => Get(nameof(SettingBoostShort));
+
+    public static string SettingAutoShort => Get(nameof(SettingAutoShort));
+
+    public static string SettingAutoOnShort => Get(nameof(SettingAutoOnShort));
+
+    public static string SettingAutoOnSecondsShort => Get(nameof(SettingAutoOnSecondsShort));
+
+    public static string SettingAutoOffShort => Get(nameof(SettingAutoOffShort));
+
+    public static string SettingAutoOffSecondsShort => Get(nameof(SettingAutoOffSecondsShort));
+
+    public static string SettingDeviceShortShort => Get(nameof(SettingDeviceShortShort));
+
+    public static string SettingDeviceFullShort => Get(nameof(SettingDeviceFullShort));
+
+    public static string SettingDeviceListShort => Get(nameof(SettingDeviceListShort));
+
+    public static string SettingDeviceDockShort => Get(nameof(SettingDeviceDockShort));
+
+    public static string SettingAdvanced => Get(nameof(SettingAdvanced));
+
+    public static string SettingAdvancedHelp => Get(nameof(SettingAdvancedHelp));
+
+    public static string SettingOpen => Get(nameof(SettingOpen));
+
+    public static string SettingCoresCount => Get(nameof(SettingCoresCount));
+
+    public static string CoresCommand => Get(nameof(CoresCommand));
+
+    public static string CoresPageTitle(string name) => string.Format(CultureInfo.CurrentCulture, Get("CoresPageTitle"), name);
+
+    public static string CoresEmptyTitle => Get(nameof(CoresEmptyTitle));
+
+    public static string CoresEmptySubtitle => Get(nameof(CoresEmptySubtitle));
+
+    public static string SettingsSaved => Get(nameof(SettingsSaved));
+
+    public static string SettingsEmpty => Get(nameof(SettingsEmpty));
+
+    public static string SettingsNumberIgnored(string label) => string.Format(CultureInfo.CurrentCulture, Get("SettingsNumberIgnored"), label);
+
+    public static string SettingsNumberLimited(string label, int value, int min, int max) => string.Format(CultureInfo.CurrentCulture, Get("SettingsNumberLimited"), label, value, min, max);
+
+    public static string SettingsHexIgnored(string band) => string.Format(CultureInfo.CurrentCulture, Get("SettingsHexIgnored"), band);
+
+    public static string SettingsBandsReordered(int cool, int warm, int hot, int critical) => string.Format(CultureInfo.CurrentCulture, Get("SettingsBandsReordered"), cool, warm, hot, critical);
+
+    public static string SettingsAutoOffLowered(int value) => string.Format(CultureInfo.CurrentCulture, Get("SettingsAutoOffLowered"), value);
 
     private static string Get(string name) => Resources.GetString(name, CultureInfo.CurrentUICulture) ?? name;
 }

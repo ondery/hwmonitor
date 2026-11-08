@@ -10,7 +10,7 @@ Live usage and temperature for every detected CPU and GPU, inside Windows Comman
 
 HW Monitor is an open-source [Command Palette](https://learn.microsoft.com/windows/powertoys/command-palette/overview) extension. It follows whatever processors and graphics adapters LibreHardwareMonitor can see: one or more Intel or AMD CPUs, and any number of NVIDIA, AMD, or Intel GPUs, on desktops and laptops. Integrated graphics that do not have a temperature sensor of their own show the processor package temperature.
 
-The pictures in this README are design mockups rendered in a dark Windows 11 style. Real screenshots from Command Palette will replace them after the first Windows release.
+The banner is an illustration. The Dock picture below is a real screenshot from Command Palette.
 
 ## Features
 
@@ -19,7 +19,7 @@ The pictures in this README are design mockups rendered in a dark Windows 11 sty
 - Live refresh, default 1 second, configurable from 500 to 3000 ms.
 - Dock items use two lines, the same shape as the built-in Performance Monitor item: the value on top (`55% · 72°C`) and a short label underneath (`CPU`, `GPU`, `iGPU`).
 - Each row's short label, optional full name, and list/dock visibility can be changed in settings. The choice is stored against the sensor library's hardware id.
-- Four temperature colors (blue, yellow, orange, red) with editable thresholds and hex colors.
+- Four temperature bands (Cool, Warm, Hot, Critical) with thresholds and named colors. A custom hex color is available when none of the names fit. List rows show a colored tag. Dock icons use the same color when dock coloring is on.
 - Cool Mode limits the active power scheme’s maximum processor state, then restores the original values.
 - English UI strings live in `src/HWMonitor.Core/Resources/Strings.resx`, so more languages can be added later.
 
@@ -27,23 +27,9 @@ The pictures in this README are design mockups rendered in a dark Windows 11 sty
 
 ### Dock
 
-![Dock mockup](docs/images/dock.png)
+![Dock items for a CPU, an integrated GPU, and a discrete GPU, with icons tinted by temperature band](docs/images/dock.png)
 
-### Sensor list
-
-![Sensor list mockup](docs/images/sensors.png)
-
-### Settings
-
-![Settings mockup](docs/images/settings.png)
-
-### Cool Mode
-
-![Cool Mode mockup](docs/images/cool-mode.png)
-
-### Color levels
-
-![Color level diagram](docs/images/color-levels.png)
+Each item shows usage and temperature on top and the short label underneath. The icon color follows the temperature band.
 
 ## Install
 
@@ -141,40 +127,42 @@ Each sensor object has `hardwareId`, `hardwareName`, `kind` (`cpu` or `gpu`), `g
 
 ## Usage
 
-Open Command Palette and run **HW Monitor**. The page lists:
+Open Command Palette and run **HW Monitor**. The page groups rows into **Cooling**, **Processors**, and **Graphics**:
 
-- **Cool Mode**
-- Each CPU package and, unless compact mode is on, each core
-- Each Intel, AMD, or NVIDIA GPU, integrated or discrete
+- **Cool Mode**, titled **Cool Mode**. Each press cycles **Auto**, **Cool On**, and **Cool Off**. The badge uses those words. Auto keeps the badge text **Auto** and uses the subtitle when cooling is engaged. Clicking a processor row opens its cores.
+- Each CPU package and, unless compact mode is on, each core, titled like `CPU 27% · 58°C`, with the hardware name and role underneath and a Cool, Warm, Hot, or Critical tag
+- Each Intel, AMD, or NVIDIA GPU, integrated or discrete, in the same shape
 
 Dock support uses `GetDockBands` and `WrappedDockItem` from Command Palette Extension SDK 0.12 (`ICommandProvider3` / `ICommandProvider4`, available since SDK 0.9). Enable the Dock in Command Palette settings and add the HW Monitor band. The band contains one item per visible CPU and GPU, then Cool Mode.
 
 `GetCommandItem` resolves the same ids, so a single sensor or Cool Mode can be pinned on its own. Sensor items open the list. Cool Mode toggles.
 
-Dock text is two lines. The title is the value, for example `55% · 72°C`. The subtitle is the short label, for example `CPU`, `GPU`, or `iGPU`. A second adapter of the same kind is `GPU 2`. The fixed `18ch` title width is not set. Width uses the same extended properties as PowerToys Performance Monitor:
+Dock text is two lines. The title is the value, for example `55% · 72°C`. The subtitle is the short label, for example `CPU`, `GPU`, or `iGPU`. A second adapter of the same kind is `GPU 2`.
 
-- `Microsoft.CommandPalette.Dock.TitleWidth` = `text:100% · 100°C`
-- `Microsoft.CommandPalette.Dock.SubtitleWidth` = `text:` plus the short label
-- `Microsoft.CommandPalette.Dock.TabularDigits` = true
+Dock items are not given a fixed title width, a subtitle width, or tabular digits. Those property-bag hints crash some Command Palette builds while the item is measured, so the item sizes to the text that is actually shown.
 
-SDK 0.12.260812002 does not include `SetDockLabelReservations`, so the extension writes those keys itself. A host that does not understand the `text:` sample form ignores it, and the item then sizes to the text that is actually shown. Temperature color tags stay on the list and on the dock.
+The extension SDK icon type has no foreground color, and the dock does not tint the value text. When **Color dock icons** is on, each sensor icon is a small drawing filled with that device's temperature color. A missing temperature, or turning the setting off, keeps the neutral icon. Cool Mode uses one icon while it is on and another while it is off. Temperature tags stay on the list.
 
 ## Settings
 
-| Setting | Default | What it does |
-| --- | --- | --- |
-| Refresh interval | 1000 ms | Clamped to 500–3000 |
-| Compact sensor list | Off | Hides per-core rows unless that row is set to Show |
-| Blue below | 60 °C | Blue under the yellow threshold. Color `#3B82F6` |
-| Yellow from | 60 °C | Color `#EAB308` |
-| Orange from | 75 °C | Color `#F97316` |
-| Red from | 90 °C | Color `#EF4444` |
-| Cool Mode processor cap | 99% | Maximum processor state while Cool Mode is on |
-| Also set processor boost mode | On | Disabled, or Efficient |
-| Auto Cool Mode | Off | Arms automatic Cool Mode |
-| Auto Cool on at | 85 °C for 10 s | Activates only after the package stays this hot |
-| Auto Cool off at | 70 °C for 10 s | Restores the scheme after it stays this cool |
-| Short label, full name, list, dock | Per device | Shown after the first sensor refresh. Empty names keep the default |
+Settings open as a grouped form. Each field has a label and a short line that says where it applies. On/off options are toggles. Thresholds and intervals are number fields with a minimum and maximum. Fixed options are dropdowns.
+
+| Group | Setting | Control | Default | Where it applies |
+| --- | --- | --- | --- | --- |
+| General | Refresh interval | Number, 500–3000 | 1000 ms | List page and Dock |
+| General | Compact sensor list | Toggle | Off | List page. Hides per-core rows unless that row is set to Show |
+| General | Color dock icons | Toggle | On | Dock only. Tints each device icon with its temperature color |
+| Temperature colors | Cool below, Warm from, Hot from, Critical from | Numbers | 60 / 60 / 75 / 90 °C | List tags and Dock icons. Hot and Critical stay above the cooler levels |
+| Temperature colors | Band color | Dropdown of named colors, plus Custom | Blue, Yellow, Orange, Red (`#3B82F6`, `#EAB308`, `#F97316`, `#EF4444`) | List tags and Dock icons |
+| Temperature colors | Custom hex | Text, used only when Custom is selected | The named color | List tags and Dock icons |
+| Cool Mode | Processor cap | Number, 1–100 | 99% | Cool Mode on the active power scheme |
+| Cool Mode | Also set processor boost mode | Toggle | On | Cool Mode |
+| Cool Mode | Boost mode | Dropdown, Disabled or Efficient | Disabled | Cool Mode, while boost limiting is on |
+| Cool Mode | Mode | Dropdown, Auto / Cool On / Cool Off | Off. An older Auto Cool switch that was on loads as Auto | List and Dock. Pressing Cool Mode cycles the same states |
+| Cool Mode | Auto temperatures and timers | Numbers | 85 °C for 10 s on, 70 °C for 10 s off | Auto Cool |
+| Devices | Short label, full name, list, dock | Text and dropdowns | Shown after the first sensor refresh | Short label: list and Dock. Full name and list choice: list. Dock choice: Dock |
+
+A previously saved hex color that matches a named color, or sits very close to one, loads as that name. Any other hex loads as Custom and the hex is kept. Empty device names keep the detected label. The choice is stored against the sensor library's hardware id.
 
 Device choices are saved in the extension settings and in `device-presentation.json` beside `settings.json`. The key is the reading id, which contains the LibreHardwareMonitor hardware identifier (for example a package id or a package id plus a core number). Renames survive restarts while that identifier stays the same. Adding or removing a device can change library indexes, so a label may need to be set again after the hardware layout changes.
 
@@ -186,13 +174,11 @@ Cool Mode is the laptop-style turbo limit used by many processor utilities. It w
 
 On the **active** Windows power scheme it sets **Maximum processor state** (`PROCTHROTTLEMAX`, AC and DC) to the configured cap. The default, 99%, disables turbo boost on most Intel and AMD processors while leaving the CPU usable. Optionally it also sets **Processor performance boost mode** (`PERFBOOSTMODE`) to Disabled (`0`) or Efficient (`3`). The scheme is reapplied with `powercfg /setactive`.
 
-Before anything is changed, the original AC and DC indexes are saved. They are written back when:
+Pressing Cool Mode cycles three saved states: **Auto**, **Cool On**, then **Cool Off**. The list badge uses those words. The dock icon and subtitle follow the same state. **Cool On** keeps the cap applied. **Cool Off** leaves the scheme alone and ignores the temperature trigger. **Auto** turns the cap on only after the processor package stays at or above the high threshold for N seconds, and turns it off after the package stays at or below the low threshold for N seconds. While Auto has engaged cooling, the badge still says **Auto** and the subtitle says the processor stayed hot.
 
-- you turn Cool Mode off
-- the extension exits
-- the process did not exit cleanly, on the next start
+The choice is stored in the extension settings and kept across restarts. An older Auto Cool switch that was on loads as **Auto**. Otherwise the mode loads as **Cool Off**.
 
-Auto Cool Mode turns the cap on only after the CPU package stays at or above the high threshold for N seconds, and turns it off after the package stays at or below the low threshold for N seconds. A manual Cool Mode session is not turned off by the automatic low threshold.
+Before anything is changed, the original AC and DC indexes are saved. They are written back when the mode is **Cool Off**, when the extension exits, and on the next start if the process did not exit cleanly. **Cool On** applies the cap again after that restore.
 
 If Windows denies the change, Cool Mode stays off and the row says: **Cool Mode could not change the active power scheme. Start Command Palette as administrator and try again.**
 
@@ -230,7 +216,7 @@ Requirements: .NET 10 SDK, Windows 10/11 SDK, and [Inno Setup 6](https://jrsoftw
 dotnet test src\HWMonitor.Tests\HWMonitor.Tests.csproj
 dotnet build hwmonitor.sln -c Release -p:Platform=x64
 cd hwmonitor
-.\build-exe.ps1 -Version 0.1.0.0
+.\build-exe.ps1 -Version 0.2.0.0
 ```
 
 The test project is plain .NET and does not need Windows. The extension, hardware reader, and sensor service target `net10.0-windows10.0.26100.0`. `EnableWindowsTargeting` is set so the Windows projects can compile on a non-Windows SDK when the targeting pack is installed. Run them on Windows.

@@ -1,6 +1,6 @@
 # Draft English locale manifest.
 PackageIdentifier: Ondery.HWMonitor
-PackageVersion: 0.1.0.0
+PackageVersion: 0.2.0.0
 PackageLocale: en-US
 Publisher: Ondery
 PublisherUrl: https://github.com/ondery/hwmonitor

@@ -18,6 +18,8 @@ internal sealed partial class HWMonitorCommandsProvider : CommandProvider, IDisp
         DisplayName = UiText.AppName;
         Id = CommandIds.Provider;
         Icon = new IconInfo(Glyphs.App);
+        var settingsPage = new MonitorSettingsPage(_settings);
+        Settings = new MonitorCommandSettings(settingsPage, _settings);
         _session = new MonitorSession(_settings);
         _commands =
         [
@@ -25,10 +27,9 @@ internal sealed partial class HWMonitorCommandsProvider : CommandProvider, IDisp
             {
                 Title = DisplayName,
                 Subtitle = UiText.AppSubtitle,
-                MoreCommands = [new CommandContextItem(_settings.Settings.SettingsPage)],
+                MoreCommands = [new CommandContextItem(settingsPage)],
             },
         ];
-        Settings = _settings.Settings;
         _session.Start();
     }
 
