@@ -40,6 +40,11 @@ public static partial class GpuEngineUsage
         return true;
     }
 
+    public static bool Is3DEngine(string? instanceName) =>
+        !string.IsNullOrEmpty(instanceName)
+        && TryParse(instanceName, out var instance)
+        && instance.EngineType.Equals("3D", StringComparison.OrdinalIgnoreCase);
+
     public static IReadOnlyList<AdapterUsage> Aggregate(
         IReadOnlyList<EngineSample> samples,
         IReadOnlyList<AdapterDescriptor> adapters)

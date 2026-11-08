@@ -17,7 +17,7 @@ internal sealed class MonitorSession : IDisposable
 {
     private readonly SettingsManager _settings;
     private readonly HardwareProbe _hardware = new(ExtensionLog.Write);
-    private readonly WindowsUsageReader _usage = new();
+    private readonly UsageSampler _usage = new();
     private readonly SensorPipeClient _pipe = new();
     private readonly CoolModeService _cool;
     private readonly AutoCoolController _autoCool = new();
@@ -38,13 +38,20 @@ internal sealed class MonitorSession : IDisposable
         _board = new SensorBoard(Page.Id, ToggleCool);
         Band = new WrappedDockItem([], CommandIds.Dock, UiText.AppName);
         _timer = new Timer(_ => Tick(), null, Timeout.Infinite, Timeout.Infinite);
-        _settings.Changed += (_, _) =>
+        _settings.Changed += OnSettingsChanged;
+    }
+
+    private void OnSettingsChanged(object? sender, EventArgs e)
+    {
+        if (_disposed)
         {
-            Interlocked.Increment(ref _settingsGeneration);
-            var period = Math.Max(1, _settings.Current.RefreshIntervalMs);
-            _timer.Change(TimeSpan.Zero, TimeSpan.FromMilliseconds(period));
-            Tick();
-        };
+            return;
+        }
+
+        Interlocked.Increment(ref _settingsGeneration);
+        _usage.SetInterval(Period());
+        ArmTimer();
+        Tick();
     }
 
     private object Gate { get; } = new();
@@ -56,8 +63,9 @@ internal sealed class MonitorSession : IDisposable
     public void Start()
     {
         _cool.RecoverOnStartup();
+        _usage.Start(Period());
         Tick();
-        RestartTimer();
+        ArmTimer();
     }
 
     public void Dispose()
@@ -68,6 +76,7 @@ internal sealed class MonitorSession : IDisposable
         }
 
         _disposed = true;
+        _settings.Changed -= OnSettingsChanged;
         _timer.Dispose();
         try
         {
@@ -87,10 +96,18 @@ internal sealed class MonitorSession : IDisposable
 
     private void ToggleCool() => _settings.CycleCoolMode();
 
-    private void RestartTimer()
+    private int Period() => MonitorOptions.ClampRefresh(_settings.Current.RefreshIntervalMs);
+
+    private void ArmTimer()
     {
-        var period = _settings.Current.RefreshIntervalMs;
-        _timer.Change(period, period);
+        var period = Period();
+        try
+        {
+            _timer.Change(period, period);
+        }
+        catch (ObjectDisposedException)
+        {
+        }
     }
 
     private void Tick()
@@ -120,8 +137,9 @@ internal sealed class MonitorSession : IDisposable
                 }
             }
 
-            var (cpu, adapters) = _usage.Sample();
-            var readings = SensorCatalog.Compose(sensors, adapters, cpu);
+            // Usage is sampled on its own timer. This publish keeps the last values.
+            var usage = _usage.Latest;
+            var readings = SensorCatalog.Compose(sensors, usage.Adapters, usage.CpuPercent);
             _settings.EnsureDevices(readings);
             var options = _settings.Current;
             var presented = readings.Select(options.Devices.Apply).ToArray();
@@ -168,6 +186,11 @@ internal sealed class MonitorSession : IDisposable
                 options = _settings.Current;
                 presented = readings.Select(options.Devices.Apply).ToArray();
                 specs = BuildSpecs(presented, options, serviceUp, serviceError);
+            }
+
+            if (_disposed)
+            {
+                return;
             }
 
             EnsureCorePages(specs);
